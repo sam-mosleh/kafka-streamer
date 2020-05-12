@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import Optional
 
 import confluent_kafka
 
+from . import utils
 
-class KafkaProducer:
+
+class AsyncKafkaProducer:
     def __init__(self,
                  hosts: str,
                  max_flush_time_on_full_buffer: float = 5.0,
@@ -40,62 +44,38 @@ class KafkaProducer:
                               f"Topic: {msg.topic()} "
                               f"Partition: {msg.partition()}")
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> AsyncKafkaProducer:
         self._poller_task = asyncio.create_task(self.poll_forever())
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         self._poller_task.cancel()
-        self.logger.info('Flushing')
-        while True:
-            pending_messages = await self.flush(1.0)
-            # future = self.flush(1.0)
-            # pending_messages = await future
-            # try:
-            #     pending_messages = await future
-            # except asyncio.CancelledError:
-            #     pending_messages = await future
-            self.logger.info(f"Flushing> Pending: {pending_messages} messages")
-            if pending_messages == 0:
-                break
-        self.logger.info('Flushing state finished')
+        await self.flush_until_all_messages_are_sent()
         return self
 
     async def poll(self, timeout: float = None):
-        loop = asyncio.get_running_loop()
-        if timeout is not None:
-            future = loop.run_in_executor(None, self._kafka_instance.poll,
-                                          timeout)
-        else:
-            future = loop.run_in_executor(None, self._kafka_instance.poll)
-        return await future
+        return await utils.call_sync_function_without_none_parameter(
+            self._kafka_instance.poll, timeout=timeout)
 
     async def flush(self, timeout: float = None):
-        print('IN FLUSH')
-        loop = asyncio.get_running_loop()
-        if timeout is not None:
-            future = loop.run_in_executor(None, self._kafka_instance.flush,
-                                          timeout)
-        else:
-            future = loop.run_in_executor(None, self._kafka_instance.flush)
-        print('Returning from flush')
-        return await future
+        return await utils.call_sync_function_without_none_parameter(
+            self._kafka_instance.flush, timeout=timeout)
 
-    async def produce(self, topic, key: bytes = None, value: bytes = None):
+    async def produce(self, topic, value: bytes, key: bytes = None):
         try:
             self._kafka_instance.poll(0)
             self._kafka_instance.produce(
                 topic=topic,
-                key=key,
                 value=value,
+                key=key,
                 on_delivery=self.delivery_report_callback)
         except BufferError as bf:
             self.logger.warning(f"Buffer error : {bf}")
             await self.flush(self.max_flush_time_on_full_buffer)
             self._kafka_instance.produce(
                 topic=topic,
-                key=key,
                 value=value,
+                key=key,
                 on_delivery=self.delivery_report_callback)
 
     async def queue_to_kafka(self, queue: asyncio.Queue):
@@ -104,18 +84,29 @@ class KafkaProducer:
                 while item := await queue.get():
                     await self.produce(item.topic, item.key, item.value)
             except asyncio.CancelledError:
-                items_in_queue = queue.qsize()
-                if items_in_queue > 0:
-                    self.logger.warning(
-                        f"There are {items_in_queue} items"
-                        " in producer queue. Waiting to produce them.")
-                    while queue.empty() is False:
-                        item = await queue.get()
-                        await self.produce(item.topic, item.key, item.value)
-                    self.logger.info("Producer queue is empty now")
-                raise asyncio.CancelledError()
+                self._produce_remaining_items_in_queue(queue)
+                raise
+
+    async def _produce_remaining_items_in_queue(self, queue: asyncio.Queue):
+        items_in_queue = queue.qsize()
+        if items_in_queue > 0:
+            self.logger.warning(f"There are {items_in_queue} items"
+                                " in producer queue. Waiting to produce them.")
+            while queue.empty() is False:
+                item = await queue.get()
+                await self.produce(item.topic, item.key, item.value)
+            self.logger.info("Producer queue is empty now")
 
     async def poll_forever(self):
         while True:
             await self.poll(1.0)
             await asyncio.sleep(1.0)
+
+    async def flush_until_all_messages_are_sent(self):
+        self.logger.info('Flushing')
+        while True:
+            pending_messages = await self.flush(1.0)
+            self.logger.info(f"Flushing> Pending: {pending_messages} messages")
+            if pending_messages == 0:
+                break
+        self.logger.info('Flushing state finished')

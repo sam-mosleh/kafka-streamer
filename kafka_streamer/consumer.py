@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import List, Optional
 
 import confluent_kafka
 
+from . import utils
 
-class KafkaConsumer:
+
+class AsyncKafkaConsumer:
     def __init__(self,
                  hosts: str,
                  group_id: str,
@@ -40,7 +44,7 @@ class KafkaConsumer:
     def revoke_callback(self, consumer, partitions):
         pass
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> AsyncKafkaConsumer:
         self.send_subscription_to_kafka()
         return self
 
@@ -60,13 +64,8 @@ class KafkaConsumer:
 
     async def poll(self,
                    timeout: float = None) -> Optional[confluent_kafka.Message]:
-        loop = asyncio.get_running_loop()
-        if timeout is not None:
-            future = loop.run_in_executor(None, self._kafka_instance.poll,
-                                          timeout)
-        else:
-            future = loop.run_in_executor(None, self._kafka_instance.poll)
-        return await future
+        return await utils.call_sync_function_without_none_parameter(
+            self._kafka_instance.poll, timeout=timeout)
 
     async def kafka_to_queue(self, queue: asyncio.Queue):
         async with self:

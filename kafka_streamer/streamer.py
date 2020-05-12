@@ -1,28 +1,14 @@
 import asyncio
 import collections
-import functools
-import inspect
 import logging
 import re
-from typing import Callable, List
+from typing import Any, Callable, List, Tuple, Union
 
 import confluent_kafka
 
+from . import models, utils
 from .consumer import KafkaConsumer
 from .producer import KafkaProducer
-
-
-def async_wrap(func):
-    if asyncio.iscoroutinefunction(func):
-        return func
-
-    @functools.wraps(func)
-    async def run(*args, **kwargs):
-        loop = asyncio.get_running_loop()
-        pfunc = functools.partial(func, *args, **kwargs)
-        return await loop.run_in_executor(None, pfunc)
-
-    return run
 
 
 class KafkaStreamer:
@@ -62,26 +48,21 @@ class KafkaStreamer:
 
     def topic(self, topic_selector: str):
         def decorator(func):
-            func_async = async_wrap(func)
-            params = inspect.signature(func_async).parameters
-            if len(params) > 1:
-                raise TypeError(
-                    'Topic consumers must have only one parameter.')
-            first_param_annotation = params[next(iter(params))].annotation
-            if first_param_annotation == inspect._empty:
-                first_param_annotation = None
-            func_async.convertor = first_param_annotation
-            self._add_callback_to_selector(func_async, topic_selector)
+            func_async = utils.async_wrap(func)
+            utils.raise_if_function_has_multiple_parameters(func_async)
+            self._add_callback_to_selector(
+                func_async, topic_selector,
+                utils.get_first_parameter_type_of_function(func_async))
             return func_async
 
         return decorator
 
-    def _add_callback_to_selector(self, func, topic_selector):
+    def _add_callback_to_selector(self, func, topic_selector, serializer):
         if topic_selector.startswith('^'):
             pattern = re.compile(topic_selector)
-            self._regex_selectors[pattern].append(func)
+            self._regex_selectors[pattern].append((func, serializer))
         else:
-            self._simple_selectors[topic_selector].append(func)
+            self._simple_selectors[topic_selector].append((func, serializer))
 
     async def run(self):
         async with self:
@@ -97,23 +78,19 @@ class KafkaStreamer:
                 break
 
     async def _call_message_handlers(self, msg: confluent_kafka.Message):
-        tasks = []
-        for consumer_callback in self._get_topic_consumers(msg.topic()):
-            if consumer_callback.convertor == bytes:
-                task = consumer_callback(msg.value())
-            elif consumer_callback.convertor is None or \
-                 consumer_callback.convertor == confluent_kafka.Message:
-                task = consumer_callback(msg)
-            else:
-                model = consumer_callback.convertor.from_bytes(msg.value())
-                task = consumer_callback(model)
-            tasks.append(task)
+        tasks = [
+            self._deserialize_and_pass_to_function(consumer_callback,
+                                                   serializable, msg)
+            for consumer_callback, serializable in self._get_topic_consumers(
+                msg.topic())
+        ]
         return [
             callback_result for callback_result in await asyncio.gather(*tasks)
             if callback_result is not None
         ]
 
-    def _get_topic_consumers(self, topic_name: str) -> List[Callable]:
+    def _get_topic_consumers(self,
+                             topic_name: str) -> List[Tuple[Callable, Any]]:
         consumers = []
         if topic_name in self._simple_selectors:
             consumers.extend(self._simple_selectors[topic_name])
@@ -121,3 +98,14 @@ class KafkaStreamer:
             if pattern.match(topic_name):
                 consumers.extend(self._regex_selectors[pattern])
         return consumers
+
+    def _deserialize_and_pass_to_function(
+        self, func: Callable,
+        deserialize_type: Union[None, confluent_kafka.Message,
+                                models.SerializableObject],
+        message: confluent_kafka.Message):
+        if deserialize_type is None or \
+           deserialize_type == confluent_kafka.Message:
+            return func(message)
+        else:
+            return func(deserialize_type.from_bytes(message.value()))
