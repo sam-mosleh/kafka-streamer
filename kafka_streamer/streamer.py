@@ -75,7 +75,6 @@ class KafkaStreamer:
                             await self._producer_queue.put(item)
                     else:
                         await self._producer_queue.put(callback_result)
-                break
 
     async def _call_message_handlers(self, msg: confluent_kafka.Message):
         tasks = [
@@ -100,10 +99,10 @@ class KafkaStreamer:
         return consumers
 
     def _deserialize_and_pass_to_function(
-        self, func: Callable,
-        deserialize_type: Union[None, confluent_kafka.Message,
-                                models.SerializableObject],
-        message: confluent_kafka.Message):
+            self, func: Callable,
+            deserialize_type: Union[None, confluent_kafka.Message, models.
+                                    SerializableObject],
+            message: confluent_kafka.Message):
         if deserialize_type is None or \
            deserialize_type == confluent_kafka.Message:
             return func(message)
