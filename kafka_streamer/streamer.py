@@ -2,29 +2,45 @@ import asyncio
 import collections
 import logging
 import re
+import struct
+from io import BytesIO
 from typing import Any, Callable, List, Tuple, Union
 
 import confluent_kafka
+from confluent_avro import SchemaRegistry
 
-from . import models, utils
-from .consumer import KafkaConsumer
-from .producer import KafkaProducer
+from . import utils
+from .consumer import AsyncKafkaConsumer
+from .models import KafkaResponse, SchematicSerializable, Serializable
+from .producer import AsyncKafkaProducer
 
 
 class KafkaStreamer:
+    _MAGIC_BYTE = 0
+
     def __init__(self,
                  hosts: str,
                  group_id: str,
+                 schema_registry_url: str = None,
                  logger: logging.Logger = None):
         self._simple_selectors = collections.defaultdict(list)
         self._regex_selectors = collections.defaultdict(list)
         self.logger = logger if logger is not None else logging.getLogger(
             'KafkaStreamer')
-        self._kafka_producer = KafkaProducer(hosts, logger=logger)
-        self._kafka_consumer = KafkaConsumer(hosts, group_id, logger=logger)
+        self._kafka_producer = AsyncKafkaProducer(hosts, logger=logger)
+        self._kafka_consumer = AsyncKafkaConsumer(hosts,
+                                                  group_id,
+                                                  logger=logger)
+        self._registry = SchemaRegistry(
+            schema_registry_url,
+            headers={'Content-Type': 'application/vnd.schemaregistry.v1+json'
+                     }) if schema_registry_url is not None else None
 
     async def __aenter__(self):
-        self._kafka_consumer.subscription = self._unique_topics()
+        unique_topics = self._unique_topics()
+        if len(unique_topics) == 0:
+            raise RuntimeError('No subscription set.')
+        self._kafka_consumer.subscription = unique_topics
         self._producer_queue = asyncio.Queue()
         self._consumer_queue = asyncio.Queue(maxsize=2)
         self._producer_task = asyncio.create_task(
@@ -34,9 +50,13 @@ class KafkaStreamer:
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        self._consumer_task.cancel()
-        self._producer_task.cancel()
-        # await asyncio.gather(self._producer_task, self._consumer_task, return_exception=True)
+        if not self._consumer_task.cancelled():
+            self._consumer_task.cancel()
+        if not self._producer_task.cancelled():
+            self._producer_task.cancel()
+        await asyncio.gather(self._producer_task,
+                             self._consumer_task,
+                             return_exceptions=True)
         return self
 
     def _unique_topics(self):
@@ -72,14 +92,17 @@ class KafkaStreamer:
                 for callback_result in all_callback_results:
                     if isinstance(callback_result, list):
                         for item in callback_result:
-                            await self._producer_queue.put(item)
+                            await self._producer_queue.put(
+                                self._serialize_response(item))
                     else:
-                        await self._producer_queue.put(callback_result)
+                        await self._producer_queue.put(
+                            self._serialize_response(callback_result))
+                break
 
     async def _call_message_handlers(self, msg: confluent_kafka.Message):
         tasks = [
-            self._deserialize_and_pass_to_function(consumer_callback,
-                                                   serializable, msg)
+            self._deserialize_and_pass_to_coroutine(consumer_callback,
+                                                    serializable, msg)
             for consumer_callback, serializable in self._get_topic_consumers(
                 msg.topic())
         ]
@@ -98,13 +121,37 @@ class KafkaStreamer:
                 consumers.extend(self._regex_selectors[pattern])
         return consumers
 
-    def _deserialize_and_pass_to_function(
-            self, func: Callable,
-            deserialize_type: Union[None, confluent_kafka.Message, models.
-                                    SerializableObject],
-            message: confluent_kafka.Message):
+    def _deserialize_and_pass_to_coroutine(
+        self, func: Callable,
+        deserialize_type: Union[None, confluent_kafka.Message, Serializable,
+                                SchematicSerializable],
+        message: confluent_kafka.Message):
         if deserialize_type is None or \
            deserialize_type == confluent_kafka.Message:
             return func(message)
-        else:
+        elif issubclass(deserialize_type, SchematicSerializable):
+            with BytesIO(message.value()) as in_stream:
+                magic, schema_id = struct.unpack(
+                    ">bI", in_stream.read(self._registry.schema_id_size + 1))
+                if magic != self._MAGIC_BYTE:
+                    raise TypeError("message does not start with magic byte")
+                return func(
+                    deserialize_type.from_bytes(
+                        in_stream, schema_id,
+                        self._registry.get_schema(schema_id)))
+        elif issubclass(deserialize_type, Serializable):
             return func(deserialize_type.from_bytes(message.value()))
+
+    def _serialize_response(self, response: KafkaResponse):
+        value = response.value
+        if isinstance(value, SchematicSerializable):
+            subject = f"{response.topic}-value"
+            schema_id = self._registry.register_schema(subject, value._schema)
+            print('subject: ', subject, schema_id)
+            with BytesIO() as out_stream:
+                out_stream.write(struct.pack("b", self._MAGIC_BYTE))
+                out_stream.write(struct.pack(">I", schema_id))
+                value = value.to_bytes(out_stream)
+        elif isinstance(value, Serializable):
+            value = value.to_bytes()
+        return {'topic': response.topic, 'key': response.key, 'value': value}

@@ -82,9 +82,11 @@ class AsyncKafkaProducer:
         async with self:
             try:
                 while item := await queue.get():
-                    await self.produce(item.topic, item.key, item.value)
+                    await self.produce(topic=item['topic'],
+                                       value=item['value'],
+                                       key=item['key'])
             except asyncio.CancelledError:
-                self._produce_remaining_items_in_queue(queue)
+                await self._produce_remaining_items_in_queue(queue)
                 raise
 
     async def _produce_remaining_items_in_queue(self, queue: asyncio.Queue):
@@ -94,7 +96,9 @@ class AsyncKafkaProducer:
                                 " in producer queue. Waiting to produce them.")
             while queue.empty() is False:
                 item = await queue.get()
-                await self.produce(item.topic, item.key, item.value)
+                await self.produce(topic=item['topic'],
+                                   value=item['value'],
+                                   key=item['key'])
             self.logger.info("Producer queue is empty now")
 
     async def poll_forever(self):
