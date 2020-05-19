@@ -13,17 +13,23 @@ class AsyncKafkaProducer:
     def __init__(self,
                  hosts: str,
                  max_flush_time_on_full_buffer: float = 5.0,
-                 logger: logging.Logger = None):
-        self.max_flush_time_on_full_buffer = max_flush_time_on_full_buffer
-        self.logger = logger if logger is not None else logging.getLogger(
-            'KafkaProducer')
-        self.conf = {
+                 logger: logging.Logger = None,
+                 debug: bool = False):
+        conf = {
             'bootstrap.servers': hosts,
             'error_cb': self.error_callback,
             'stats_cb': self.stats_callback,
-            'throttle_cb': self.throttle_callback
+            'throttle_cb': self.throttle_callback,
+            'on_delivery': self.delivery_report_callback
         }
-        self._kafka_instance = confluent_kafka.Producer(self.conf)
+        if debug:
+            conf['debug'] = 'topic,broker'
+
+        self.max_flush_time_on_full_buffer = max_flush_time_on_full_buffer
+        self.logger = logger if logger is not None else logging.getLogger(
+            'KafkaProducer')
+        self._kafka_instance = confluent_kafka.Producer(conf,
+                                                        logger=self.logger)
 
     def error_callback(self, error: confluent_kafka.KafkaError):
         pass
@@ -49,7 +55,8 @@ class AsyncKafkaProducer:
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        self._poller_task.cancel()
+        if not self._poller_task.cancelled():
+            self._poller_task.cancel()
         await self.flush_until_all_messages_are_sent()
         return self
 
@@ -64,19 +71,11 @@ class AsyncKafkaProducer:
     async def produce(self, topic, value: bytes, key: bytes = None):
         try:
             self._kafka_instance.poll(0)
-            self._kafka_instance.produce(
-                topic=topic,
-                value=value,
-                key=key,
-                on_delivery=self.delivery_report_callback)
+            self._kafka_instance.produce(topic=topic, value=value, key=key)
         except BufferError as bf:
             self.logger.warning(f"Buffer error : {bf}")
             await self.flush(self.max_flush_time_on_full_buffer)
-            self._kafka_instance.produce(
-                topic=topic,
-                value=value,
-                key=key,
-                on_delivery=self.delivery_report_callback)
+            self._kafka_instance.produce(topic=topic, value=value, key=key)
 
     async def queue_to_kafka(self, queue: asyncio.Queue):
         async with self:

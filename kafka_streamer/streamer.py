@@ -22,15 +22,16 @@ class KafkaStreamer:
                  hosts: str,
                  group_id: str,
                  schema_registry_url: str = None,
-                 logger: logging.Logger = None):
+                 logger: logging.Logger = None,
+                 debug: bool = False):
+        self._hosts = hosts
+        self._group_id = group_id
+        self._parent_logger = logger
+        self._debug = debug
         self._simple_selectors = collections.defaultdict(list)
         self._regex_selectors = collections.defaultdict(list)
         self.logger = logger if logger is not None else logging.getLogger(
             'KafkaStreamer')
-        self._kafka_producer = AsyncKafkaProducer(hosts, logger=logger)
-        self._kafka_consumer = AsyncKafkaConsumer(hosts,
-                                                  group_id,
-                                                  logger=logger)
         self._registry = SchemaRegistry(
             schema_registry_url,
             headers={'Content-Type': 'application/vnd.schemaregistry.v1+json'
@@ -40,9 +41,18 @@ class KafkaStreamer:
         unique_topics = self._unique_topics()
         if len(unique_topics) == 0:
             raise RuntimeError('No subscription set.')
-        self._kafka_consumer.subscription = unique_topics
+
+        self._kafka_producer = AsyncKafkaProducer(self._hosts,
+                                                  logger=self._parent_logger,
+                                                  debug=self._debug)
+        self._kafka_consumer = AsyncKafkaConsumer(self._hosts,
+                                                  self._group_id,
+                                                  unique_topics,
+                                                  False,
+                                                  logger=self._parent_logger,
+                                                  debug=self._debug)
         self._producer_queue = asyncio.Queue()
-        self._consumer_queue = asyncio.Queue(maxsize=2)
+        self._consumer_queue = asyncio.Queue(maxsize=1000)
         self._producer_task = asyncio.create_task(
             self._kafka_producer.queue_to_kafka(self._producer_queue))
         self._consumer_task = asyncio.create_task(
@@ -97,6 +107,7 @@ class KafkaStreamer:
                     else:
                         await self._producer_queue.put(
                             self._serialize_response(callback_result))
+                self._kafka_consumer.set_offset(msg)
                 break
 
     async def _call_message_handlers(self, msg: confluent_kafka.Message):

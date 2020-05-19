@@ -14,20 +14,26 @@ class AsyncKafkaConsumer:
                  hosts: str,
                  group_id: str,
                  subscription: List[str] = [],
-                 logger: logging.Logger = None):
-        self.conf = {
+                 auto_offset: bool = True,
+                 logger: logging.Logger = None,
+                 debug: bool = False):
+        conf = {
             'bootstrap.servers': hosts,
             'group.id': group_id,
             'auto.offset.reset': 'earliest',
+            'enable.auto.offset.store': auto_offset,
             'statistics.interval.ms': 1000,
             'error_cb': self.error_callback,
             'stats_cb': self.stats_callback,
             'throttle_cb': self.throttle_callback
         }
+        if debug:
+            conf['debug'] = 'consumer'
         self.subscription = subscription
         self.logger = logger if logger is not None else logging.getLogger(
             'KafkaConsumer')
-        self._kafka_instance = confluent_kafka.Consumer(self.conf)
+        self._kafka_instance = confluent_kafka.Consumer(conf,
+                                                        logger=self.logger)
 
     def error_callback(self, error: confluent_kafka.KafkaError):
         pass
@@ -75,9 +81,12 @@ class AsyncKafkaConsumer:
 
     async def fetch(self) -> confluent_kafka.Message:
         while True:
-            message = await self.poll(1.0)
+            message = self._kafka_instance.poll(0) or await self.poll(1.0)
             if message is not None:
                 if message.error():
                     self.logger.error(message.error())
                     continue
                 return message
+
+    def set_offset(self, message: confluent_kafka.Message):
+        self._kafka_instance.store_offsets(message)
