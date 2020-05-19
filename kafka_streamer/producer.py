@@ -58,7 +58,6 @@ class AsyncKafkaProducer:
         if not self._poller_task.cancelled():
             self._poller_task.cancel()
         await self.flush_until_all_messages_are_sent()
-        return self
 
     async def poll(self, timeout: float = None):
         return await utils.call_sync_function_without_none_parameter(

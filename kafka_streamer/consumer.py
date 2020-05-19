@@ -56,7 +56,6 @@ class AsyncKafkaConsumer:
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         self.close_instance()
-        return self
 
     def send_subscription_to_kafka(self):
         self._kafka_instance.subscribe(self.subscription,

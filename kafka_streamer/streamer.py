@@ -38,25 +38,8 @@ class KafkaStreamer:
                      }) if schema_registry_url is not None else None
 
     async def __aenter__(self):
-        unique_topics = self._unique_topics()
-        if len(unique_topics) == 0:
-            raise RuntimeError('No subscription set.')
-
-        self._kafka_producer = AsyncKafkaProducer(self._hosts,
-                                                  logger=self._parent_logger,
-                                                  debug=self._debug)
-        self._kafka_consumer = AsyncKafkaConsumer(self._hosts,
-                                                  self._group_id,
-                                                  unique_topics,
-                                                  False,
-                                                  logger=self._parent_logger,
-                                                  debug=self._debug)
-        self._producer_queue = asyncio.Queue()
-        self._consumer_queue = asyncio.Queue(maxsize=1000)
-        self._producer_task = asyncio.create_task(
-            self._kafka_producer.queue_to_kafka(self._producer_queue))
-        self._consumer_task = asyncio.create_task(
-            self._kafka_consumer.kafka_to_queue(self._consumer_queue))
+        self._create_producer()
+        self._create_consumer()
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -67,7 +50,28 @@ class KafkaStreamer:
         await asyncio.gather(self._producer_task,
                              self._consumer_task,
                              return_exceptions=True)
-        return self
+
+    def _create_producer(self):
+        self._kafka_producer = AsyncKafkaProducer(self._hosts,
+                                                  logger=self._parent_logger,
+                                                  debug=self._debug)
+        self._producer_queue = asyncio.Queue()
+        self._producer_task = asyncio.create_task(
+            self._kafka_producer.queue_to_kafka(self._producer_queue))
+
+    def _create_consumer(self, queue_max_size: int = 1000):
+        unique_topics = self._unique_topics()
+        if len(unique_topics) == 0:
+            raise RuntimeError('No subscription set.')
+        self._kafka_consumer = AsyncKafkaConsumer(self._hosts,
+                                                  self._group_id,
+                                                  unique_topics,
+                                                  False,
+                                                  logger=self._parent_logger,
+                                                  debug=self._debug)
+        self._consumer_queue = asyncio.Queue(queue_max_size)
+        self._consumer_task = asyncio.create_task(
+            self._kafka_consumer.kafka_to_queue(self._consumer_queue))
 
     def _unique_topics(self):
         simple_topics = list(self._simple_selectors.keys())
@@ -158,7 +162,6 @@ class KafkaStreamer:
         if isinstance(value, SchematicSerializable):
             subject = f"{response.topic}-value"
             schema_id = self._registry.register_schema(subject, value._schema)
-            print('subject: ', subject, schema_id)
             with BytesIO() as out_stream:
                 out_stream.write(struct.pack("b", self._MAGIC_BYTE))
                 out_stream.write(struct.pack(">I", schema_id))
