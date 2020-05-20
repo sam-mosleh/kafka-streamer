@@ -43,9 +43,8 @@ class KafkaStreamer:
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        if not self._consumer_task.cancelled():
+        if exc_type != asyncio.CancelledError:
             self._consumer_task.cancel()
-        if not self._producer_task.cancelled():
             self._producer_task.cancel()
         await asyncio.gather(self._producer_task,
                              self._consumer_task,
@@ -104,7 +103,6 @@ class KafkaStreamer:
                 msg: confluent_kafka.Message = await self._consumer_queue.get()
                 await asyncio.gather(*self._message_handlers(msg))
                 self._kafka_consumer.set_offset(msg)
-                break
 
     def _message_handlers(self, msg: confluent_kafka.Message) -> list:
         return [
