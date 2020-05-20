@@ -70,10 +70,3 @@ class AvroSerializable(SchematicSerializable,
         deser_data = fastavro.schemaless_reader(in_stream,
                                                 cls._encoders[schema_id])
         return cls(**deser_data)
-
-
-@dataclass
-class KafkaResponse:
-    topic: str
-    key: str = None
-    value: Serializable = None

@@ -67,7 +67,7 @@ class AsyncKafkaProducer:
         return await utils.call_sync_function_without_none_parameter(
             self._kafka_instance.flush, timeout=timeout)
 
-    async def produce(self, topic, value: bytes, key: bytes = None):
+    async def produce(self, topic: str, value: bytes, key: bytes = None):
         try:
             self._kafka_instance.poll(0)
             self._kafka_instance.produce(topic=topic, value=value, key=key)

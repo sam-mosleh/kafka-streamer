@@ -11,7 +11,7 @@ from confluent_avro import SchemaRegistry
 
 from . import utils
 from .consumer import AsyncKafkaConsumer
-from .models import KafkaResponse, SchematicSerializable, Serializable
+from .models import SchematicSerializable, Serializable
 from .producer import AsyncKafkaProducer
 
 
@@ -102,28 +102,15 @@ class KafkaStreamer:
         async with self:
             while True:
                 msg: confluent_kafka.Message = await self._consumer_queue.get()
-                all_callback_results = await self._call_message_handlers(msg)
-                for callback_result in all_callback_results:
-                    if isinstance(callback_result, list):
-                        for item in callback_result:
-                            await self._producer_queue.put(
-                                self._serialize_response(item))
-                    else:
-                        await self._producer_queue.put(
-                            self._serialize_response(callback_result))
+                await asyncio.gather(*self._message_handlers(msg))
                 self._kafka_consumer.set_offset(msg)
                 break
 
-    async def _call_message_handlers(self, msg: confluent_kafka.Message):
-        tasks = [
-            self._deserialize_and_pass_to_coroutine(consumer_callback,
-                                                    serializable, msg)
+    def _message_handlers(self, msg: confluent_kafka.Message) -> list:
+        return [
+            consumer_callback(self._deserialize(msg, serializable))
             for consumer_callback, serializable in self._get_topic_consumers(
                 msg.topic())
-        ]
-        return [
-            callback_result for callback_result in await asyncio.gather(*tasks)
-            if callback_result is not None
         ]
 
     def _get_topic_consumers(self,
@@ -136,31 +123,36 @@ class KafkaStreamer:
                 consumers.extend(self._regex_selectors[pattern])
         return consumers
 
-    def _deserialize_and_pass_to_coroutine(
-        self, func: Callable,
-        deserialize_type: Union[None, confluent_kafka.Message, Serializable,
-                                SchematicSerializable],
-        message: confluent_kafka.Message):
+    async def send(self,
+                   topic: str,
+                   value: Union[bytes, Serializable, SchematicSerializable],
+                   key: bytes = None):
+        await self._producer_queue.put(self._serialize(topic, value, key))
+
+    def _deserialize(self, message: confluent_kafka.Message,
+                     deserialize_type: Union[None, confluent_kafka.Message,
+                                             Serializable,
+                                             SchematicSerializable]):
         if deserialize_type is None or \
            deserialize_type == confluent_kafka.Message:
-            return func(message)
+            return message
         elif issubclass(deserialize_type, SchematicSerializable):
             with BytesIO(message.value()) as in_stream:
                 magic, schema_id = struct.unpack(
                     ">bI", in_stream.read(self._registry.schema_id_size + 1))
                 if magic != self._MAGIC_BYTE:
                     raise TypeError("message does not start with magic byte")
-                return func(
-                    deserialize_type.from_bytes(
-                        in_stream, schema_id,
-                        self._registry.get_schema(schema_id)))
+                return deserialize_type.from_bytes(
+                    in_stream, schema_id, self._registry.get_schema(schema_id))
         elif issubclass(deserialize_type, Serializable):
-            return func(deserialize_type.from_bytes(message.value()))
+            return deserialize_type.from_bytes(message.value())
 
-    def _serialize_response(self, response: KafkaResponse):
-        value = response.value
+    def _serialize(self,
+                   topic: str,
+                   value: Union[bytes, Serializable, SchematicSerializable],
+                   key: bytes = None) -> dict:
         if isinstance(value, SchematicSerializable):
-            subject = f"{response.topic}-value"
+            subject = f"{topic}-value"
             schema_id = self._registry.register_schema(subject, value._schema)
             with BytesIO() as out_stream:
                 out_stream.write(struct.pack("b", self._MAGIC_BYTE))
@@ -168,4 +160,4 @@ class KafkaStreamer:
                 value = value.to_bytes(out_stream)
         elif isinstance(value, Serializable):
             value = value.to_bytes()
-        return {'topic': response.topic, 'key': response.key, 'value': value}
+        return {'topic': topic, 'key': key, 'value': value}
