@@ -7,10 +7,10 @@ from kafka_streamer.models import KafkaResponse
 from kafka_streamer.producer import KafkaProducer
 from kafka_streamer.streamer import KafkaStreamer
 
-host = os.environ.get('KAFKA_HOST')
-topic = os.environ.get('KAFKA_TOPIC')
-group_id = os.environ.get('KAFKA_GROUPID')
-data = os.environ.get('KAFKA_DATA').encode('utf8')
+host = os.environ.get("KAFKA_HOST")
+topic = os.environ.get("KAFKA_TOPIC")
+group_id = os.environ.get("KAFKA_GROUPID")
+data = os.environ.get("KAFKA_DATA").encode("utf8")
 
 
 async def simple_produce():

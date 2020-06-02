@@ -1,11 +1,10 @@
 import asyncio
 import functools
 import inspect
-from typing import Callable
+from typing import Callable, Tuple
 
 
-async def call_sync_function_without_none_parameter(function: Callable,
-                                                    **kwargs):
+async def call_sync_function_without_none_parameter(function: Callable, **kwargs):
     loop = asyncio.get_running_loop()
     partial = functools.partial(function, **none_value_removed_dict(kwargs))
     return await loop.run_in_executor(None, partial)
@@ -18,8 +17,20 @@ def none_value_removed_dict(d: dict):
 def raise_if_function_has_multiple_parameters(func: Callable):
     params = inspect.signature(func).parameters
     if len(params) > 1:
-        raise TypeError(
-            f"Function {func.__name__} must have only one parameter.")
+        raise TypeError(f"Function {func.__name__} must have only one parameter.")
+
+
+def get_function_parameters_name(func: Callable):
+    return tuple(inspect.signature(func).parameters.keys())
+
+
+def raise_if_function_parameters_not_in(func: Callable, available_params: Tuple[str]):
+    for key in get_function_parameters_name(func):
+        if key not in available_params:
+            raise TypeError(
+                f"{key} is not a valid function parameter."
+                f"Available parameters: {available_params}"
+            )
 
 
 def get_first_parameter_type_of_function(func: Callable):

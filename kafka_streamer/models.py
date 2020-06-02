@@ -12,61 +12,58 @@ from pydantic.main import ModelMetaclass
 
 
 class Serializable:
-    def to_bytes(self):
-        raise NotImplementedError()
-
     @staticmethod
     def from_bytes(cls, data: bytes) -> Serializable:
         raise NotImplementedError()
 
-
-class RawBytes(Serializable):
-    def __init__(self, data: bytes):
-        self.data = data
-
-    def to_bytes(self) -> bytes:
-        return self.data
-
-    @classmethod
-    def from_bytes(cls, data: bytes) -> RawBytes:
-        return RawBytes(data)
+    def to_bytes(self):
+        raise NotImplementedError()
 
 
 class SchematicSerializable:
-    _schema = None
-    _encoders = {}
-
-    def to_bytes(self, schema_id) -> bytes:
+    @classmethod
+    def get_model_schema(cls) -> str:
         raise NotImplementedError()
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> SchematicSerializable:
-        pass
+    def from_bytes(
+        cls, in_stream: BytesIO, schema_id: int, schema: str
+    ) -> SchematicSerializable:
+        raise NotImplementedError()
+
+    def to_bytes(self) -> bytes:
+        raise NotImplementedError()
 
 
 class AvroSchemaMetaClass(ModelMetaclass):
     def __new__(cls, name, bases, dct):
         new_class = super().__new__(cls, name, bases, dct)
         generated_avro = JsonSchema(new_class.schema()).to_avro()
-        new_class._schema = json.dumps(generated_avro)
         new_class._avro_schema = fastavro.parse_schema(generated_avro)
         return new_class
 
 
-class AvroSerializable(SchematicSerializable,
-                       BaseModel,
-                       metaclass=AvroSchemaMetaClass):
-    def to_bytes(self, out_stream: BytesIO) -> bytes:
-        fastavro.schemaless_writer(out_stream, self._avro_schema, self.dict())
-        return out_stream.getvalue()
+class AvroSerializable(SchematicSerializable, BaseModel, metaclass=AvroSchemaMetaClass):
+    _encoders = {}
 
     @classmethod
-    def from_bytes(cls, in_stream: BytesIO, schema_id: int,
-                   schema: str) -> AvroSerializable:
-        if schema_id not in cls._encoders:
+    def get_model_schema(cls) -> str:
+        return json.dumps(JsonSchema(cls.schema()).to_avro())
+
+    @classmethod
+    def from_bytes(
+        cls, in_stream: BytesIO, schema_id: int, schema: str
+    ) -> AvroSerializable:
+        if schema_id not in AvroSerializable._encoders:
             schema_json = json.loads(schema)
             avro_schema = fastavro.parse_schema(schema_json)
-            cls._encoders[schema_id] = avro_schema
-        deser_data = fastavro.schemaless_reader(in_stream,
-                                                cls._encoders[schema_id])
+            AvroSerializable._encoders[schema_id] = avro_schema
+        deser_data = fastavro.schemaless_reader(
+            in_stream, AvroSerializable._encoders[schema_id]
+        )
         return cls(**deser_data)
+
+    def to_bytes(self) -> bytes:
+        with BytesIO() as out_stream:
+            fastavro.schemaless_writer(out_stream, self._avro_schema, self.dict())
+            return out_stream.getvalue()
