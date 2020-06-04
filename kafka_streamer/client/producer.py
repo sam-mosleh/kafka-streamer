@@ -60,13 +60,19 @@ class AsyncKafkaProducer:
             )
 
     async def __aenter__(self) -> AsyncKafkaProducer:
-        self._poller_task = asyncio.create_task(self.poll_forever())
+        self.create_poller()
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
+        self.cancel_poller()
+        await self.flush_until_all_messages_are_sent()
+
+    def create_poller(self):
+        self._poller_task = asyncio.create_task(self.poll_forever())
+
+    def cancel_poller(self):
         if not self._poller_task.cancelled():
             self._poller_task.cancel()
-        await self.flush_until_all_messages_are_sent()
 
     async def poll(self, timeout: float = 0.0):
         return await self._async_poll(timeout=timeout)
@@ -74,49 +80,54 @@ class AsyncKafkaProducer:
     async def flush(self, timeout: float = 0.0):
         return await self._async_flush(timeout=timeout)
 
+    def _send(self, topic: str, value: Union[bytes, str], key: Union[bytes, str]):
+        self._kafka_instance.poll(0)
+        self._kafka_instance.produce(topic=topic, value=value, key=key)
+
     async def produce(self, topic: str, value: bytes, key: bytes = None):
         try:
-            self._kafka_instance.poll(0)
-            self._kafka_instance.produce(topic=topic, value=value, key=key)
+            self._send(topic, value, key)
         except BufferError as bf:
             self.logger.warning(f"Buffer error : {bf}")
             await self.flush(self.max_flush_time_on_full_buffer)
-            self._kafka_instance.produce(topic=topic, value=value, key=key)
+            self._send(topic, value, key)
 
     async def queue_to_kafka(self, queue: asyncio.Queue):
         async with self:
             try:
-                while item := await queue.get():
-                    await self.produce(
-                        topic=item["topic"], value=item["value"], key=item["key"]
-                    )
+                await self._get_from_queue_and_produce(queue)
             except asyncio.CancelledError:
-                await self._produce_remaining_items_in_queue(queue)
+                if queue.qsize() > 0:
+                    self.logger.warning(
+                        f"There are {queue.qsize()} items"
+                        " in producer queue. Waiting to produce them."
+                    )
+                # Send termination signal
+                await queue.put(None)
+                await self._get_from_queue_and_produce(queue)
                 raise
 
-    async def _produce_remaining_items_in_queue(self, queue: asyncio.Queue):
-        items_in_queue = queue.qsize()
-        if items_in_queue > 0:
-            self.logger.warning(
-                f"There are {items_in_queue} items"
-                " in producer queue. Waiting to produce them."
+    async def _get_from_queue_and_produce(self, queue: asyncio.Queue):
+        while item := await queue.get():
+            await self.produce(
+                topic=item["topic"], value=item["value"], key=item["key"]
             )
-            while queue.empty() is False:
-                item = await queue.get()
-                await self.produce(
-                    topic=item["topic"], value=item["value"], key=item["key"]
-                )
-            self.logger.info("Producer queue is empty now")
+        if queue.qsize() > 0:
+            self.logger.error(
+                f"There are {queue.qsize()} items"
+                " in producer queue. Discarding them."
+            )
+        self.logger.info("Producing from queue finished")
 
     async def poll_forever(self):
         while True:
             await self.poll(1.0)
             await asyncio.sleep(1.0)
 
-    async def flush_until_all_messages_are_sent(self):
+    async def flush_until_all_messages_are_sent(self, flush_timeouts: float = 1.0):
         self.logger.info("Flushing")
         while True:
-            pending_messages = await self.flush(1.0)
+            pending_messages = await self.flush(flush_timeouts)
             self.logger.info(f"Flushing> Pending: {pending_messages} messages")
             if pending_messages == 0:
                 break

@@ -33,10 +33,10 @@ class AsyncKafkaConsumer:
         if debug:
             conf["debug"] = "consumer"
         self.subscription = subscription
-        self.logger = (logger if logger is not None else
-                       logging.getLogger("KafkaConsumer"))
-        self._kafka_instance = confluent_kafka.Consumer(conf,
-                                                        logger=self.logger)
+        self.logger = (
+            logger if logger is not None else logging.getLogger("KafkaConsumer")
+        )
+        self._kafka_instance = confluent_kafka.Consumer(conf, logger=self.logger)
         self._async_poll = async_wrap(self._kafka_instance.poll)
 
     def error_callback(self, error: confluent_kafka.KafkaError):
@@ -74,10 +74,8 @@ class AsyncKafkaConsumer:
         self._kafka_instance.close()
         self.logger.info("Consumer closed.")
 
-    async def poll(self,
-                   timeout: float = 1.0) -> Optional[confluent_kafka.Message]:
-        return self._kafka_instance.poll(0) or await self._async_poll(
-            timeout=timeout)
+    async def poll(self, timeout: float = 1.0) -> Optional[confluent_kafka.Message]:
+        return self._kafka_instance.poll(0) or await self._async_poll(timeout=timeout)
 
     def set_offset(self, message: confluent_kafka.Message):
         self._kafka_instance.store_offsets(message)
