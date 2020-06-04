@@ -6,7 +6,7 @@ from typing import Optional, List
 
 import confluent_kafka
 
-from . import utils
+from kafka_streamer.utils import async_wrap
 
 
 class AsyncKafkaProducer:
@@ -34,6 +34,8 @@ class AsyncKafkaProducer:
             logger if logger is not None else logging.getLogger("KafkaProducer")
         )
         self._kafka_instance = confluent_kafka.Producer(conf, logger=self.logger)
+        self._async_poll = async_wrap(self._kafka_instance.poll)
+        self._async_flush = async_wrap(self._kafka_instance.poll)
 
     def error_callback(self, error: confluent_kafka.KafkaError):
         pass
@@ -66,15 +68,11 @@ class AsyncKafkaProducer:
             self._poller_task.cancel()
         await self.flush_until_all_messages_are_sent()
 
-    async def poll(self, timeout: float = None):
-        return await utils.call_sync_function_without_none_parameter(
-            self._kafka_instance.poll, timeout=timeout
-        )
+    async def poll(self, timeout: float = 0.0):
+        return await self._async_poll(timeout=timeout)
 
-    async def flush(self, timeout: float = None):
-        return await utils.call_sync_function_without_none_parameter(
-            self._kafka_instance.flush, timeout=timeout
-        )
+    async def flush(self, timeout: float = 0.0):
+        return await self._async_flush(timeout=timeout)
 
     async def produce(self, topic: str, value: bytes, key: bytes = None):
         try:

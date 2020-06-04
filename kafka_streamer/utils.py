@@ -4,16 +4,6 @@ import inspect
 from typing import Callable, Tuple
 
 
-async def call_sync_function_without_none_parameter(function: Callable, **kwargs):
-    loop = asyncio.get_running_loop()
-    partial = functools.partial(function, **none_value_removed_dict(kwargs))
-    return await loop.run_in_executor(None, partial)
-
-
-def none_value_removed_dict(d: dict):
-    return {key: value for key, value in d.items() if value is not None}
-
-
 def raise_if_function_has_multiple_parameters(func: Callable):
     params = inspect.signature(func).parameters
     if len(params) > 1:

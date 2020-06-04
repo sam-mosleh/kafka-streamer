@@ -1,11 +1,12 @@
 from __future__ import annotations
+
 import asyncio
 import logging
 from typing import List, Optional
 
 import confluent_kafka
 
-from . import utils
+from kafka_streamer.utils import async_wrap
 
 
 class AsyncKafkaConsumer:
@@ -32,10 +33,11 @@ class AsyncKafkaConsumer:
         if debug:
             conf["debug"] = "consumer"
         self.subscription = subscription
-        self.logger = (
-            logger if logger is not None else logging.getLogger("KafkaConsumer")
-        )
-        self._kafka_instance = confluent_kafka.Consumer(conf, logger=self.logger)
+        self.logger = (logger if logger is not None else
+                       logging.getLogger("KafkaConsumer"))
+        self._kafka_instance = confluent_kafka.Consumer(conf,
+                                                        logger=self.logger)
+        self._async_poll = async_wrap(self._kafka_instance.poll)
 
     def error_callback(self, error: confluent_kafka.KafkaError):
         pass
@@ -54,28 +56,31 @@ class AsyncKafkaConsumer:
 
     async def __aenter__(self) -> AsyncKafkaConsumer:
         if len(self.subscription) > 0:
-            self.send_subscription_to_kafka()
+            self.subscribe(self.subscription)
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        self.close_instance()
+        self.close()
 
-    def send_subscription_to_kafka(self):
+    def subscribe(self, subscription: List[str]):
         self._kafka_instance.subscribe(
-            self.subscription,
+            subscription,
             on_assign=self.assign_callback,
             on_revoke=self.revoke_callback,
         )
         self.logger.info(f"Subscription to {self.subscription} sent")
 
-    def close_instance(self):
-        self.logger.info("Closing consumer.")
+    def close(self):
         self._kafka_instance.close()
+        self.logger.info("Consumer closed.")
 
-    async def poll(self, timeout: float = None) -> Optional[confluent_kafka.Message]:
-        return await utils.call_sync_function_without_none_parameter(
-            self._kafka_instance.poll, timeout=timeout
-        )
+    async def poll(self,
+                   timeout: float = 1.0) -> Optional[confluent_kafka.Message]:
+        return self._kafka_instance.poll(0) or await self._async_poll(
+            timeout=timeout)
+
+    def set_offset(self, message: confluent_kafka.Message):
+        self._kafka_instance.store_offsets(message)
 
     async def kafka_to_queue(self, queue: asyncio.Queue):
         async with self:
@@ -85,12 +90,15 @@ class AsyncKafkaConsumer:
 
     async def fetch(self) -> confluent_kafka.Message:
         while True:
-            message = self._kafka_instance.poll(0) or await self.poll(1.0)
-            if message is not None:
-                if message.error():
-                    self.logger.error(message.error())
-                    continue
+            message = await self.poll()
+            if self._message_validator(message) is True:
                 return message
 
-    def set_offset(self, message: confluent_kafka.Message):
-        self._kafka_instance.store_offsets(message)
+    def _message_validator(self, message: Optional[confluent_kafka]) -> bool:
+        if message is None:
+            return False
+        if message.error():
+            self.logger.error(message.error())
+            return False
+        else:
+            return True
