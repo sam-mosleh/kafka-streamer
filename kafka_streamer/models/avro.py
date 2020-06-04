@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import struct
-from dataclasses import dataclass
 from io import BytesIO
 
 import fastavro
@@ -10,29 +8,9 @@ from avro_schema.convertor import JsonSchema
 from pydantic import BaseModel
 from pydantic.main import ModelMetaclass
 
+from kafka_streamer.exceptions import MessageDeserializationError
 
-class Serializable:
-    @staticmethod
-    def from_bytes(cls, data: bytes) -> Serializable:
-        raise NotImplementedError()
-
-    def to_bytes(self):
-        raise NotImplementedError()
-
-
-class SchematicSerializable:
-    @classmethod
-    def get_model_schema(cls) -> str:
-        raise NotImplementedError()
-
-    @classmethod
-    def from_bytes(
-        cls, in_stream: BytesIO, schema_id: int, schema: str
-    ) -> SchematicSerializable:
-        raise NotImplementedError()
-
-    def to_bytes(self) -> bytes:
-        raise NotImplementedError()
+from .base import SchematicSerializable
 
 
 class AvroSchemaMetaClass(ModelMetaclass):
@@ -45,6 +23,7 @@ class AvroSchemaMetaClass(ModelMetaclass):
 
 class AvroSerializable(SchematicSerializable, BaseModel, metaclass=AvroSchemaMetaClass):
     _encoders = {}
+    _avro_schema: dict = {}
 
     @classmethod
     def get_model_schema(cls) -> str:
@@ -58,9 +37,14 @@ class AvroSerializable(SchematicSerializable, BaseModel, metaclass=AvroSchemaMet
             schema_json = json.loads(schema)
             avro_schema = fastavro.parse_schema(schema_json)
             AvroSerializable._encoders[schema_id] = avro_schema
-        deser_data = fastavro.schemaless_reader(
-            in_stream, AvroSerializable._encoders[schema_id]
-        )
+        try:
+            deser_data = fastavro.schemaless_reader(
+                in_stream, AvroSerializable._encoders[schema_id]
+            )
+        except StopIteration:
+            raise MessageDeserializationError(
+                "The given schema might be incompatible " "or the data is corrupted."
+            )
         return cls(**deser_data)
 
     def to_bytes(self) -> bytes:
