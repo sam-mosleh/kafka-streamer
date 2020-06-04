@@ -5,15 +5,6 @@ from pytest_mock import MockFixture
 
 from kafka_streamer.client import AsyncKafkaProducer
 
-
-class SampleMessage:
-    def __init__(self, error: str = ""):
-        self._error = error
-
-    def error(self):
-        return self._error
-
-
 pytestmark = pytest.mark.asyncio
 
 

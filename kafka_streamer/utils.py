@@ -1,7 +1,7 @@
 import asyncio
 import functools
 import inspect
-from typing import Callable
+from typing import Callable, Set
 
 # def raise_if_function_has_multiple_parameters(func: Callable):
 #     params = inspect.signature(func).parameters
@@ -17,8 +17,8 @@ from typing import Callable
 #     return first_param_annotation
 
 
-def get_function_parameter_names(func: Callable):
-    return tuple(inspect.signature(func).parameters.keys())
+def get_function_parameter_names(func: Callable) -> Set[str]:
+    return set(inspect.signature(func).parameters.keys())
 
 
 def async_wrap(func):

@@ -1,6 +1,6 @@
 import io
 import struct
-from typing import Union
+from typing import Callable, Union
 
 from kafka_streamer.models import SchematicSerializable, Serializable
 
@@ -8,9 +8,10 @@ from .base import BaseTopic
 
 
 class SingleTopic(BaseTopic):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, produce_callback: Callable, **kwargs):
         super().__init__(*args, **kwargs)
         self.name = self.topic_name
+        self._produce_callback = produce_callback
         if issubclass(self.key_type, SchematicSerializable):
             self.key_schema_id = self.register_schema("key", self.key_type)
         if issubclass(self.value_type, SchematicSerializable):

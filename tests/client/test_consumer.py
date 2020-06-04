@@ -4,15 +4,7 @@ import pytest
 from pytest_mock import MockFixture
 
 from kafka_streamer.client import AsyncKafkaConsumer
-
-
-class SampleMessage:
-    def __init__(self, error: str = ""):
-        self._error = error
-
-    def error(self):
-        return self._error
-
+from tests.message import SampleMessage
 
 pytestmark = pytest.mark.asyncio
 
@@ -62,7 +54,7 @@ async def test_close_consumer_after_exit(
 def test_message_validator():
     c = AsyncKafkaConsumer([], "")
     assert c._message_validator(None) is False
-    assert c._message_validator(SampleMessage("Some Error")) is False
+    assert c._message_validator(SampleMessage(error="Some Error")) is False
     assert c._message_validator(SampleMessage()) is True
 
 
