@@ -102,12 +102,12 @@ async def test_consumer_with_offset_parameter():
     f.assert_called_once_with(offset=100)
 
 
-def test_deserialize_nothing():
+def test_deserialize_bytes_type():
     topic = BaseTopic("test-topic")
     assert b"1234" == topic.deserialize(b"1234", bytes)
 
 
-def test_deserialize_serializable(mocker: MockFixture):
+def test_deserialize_serializable_type(mocker: MockFixture):
     topic = BaseTopic("test-topic")
     from_bytes = mocker.patch.object(Serializable, "from_bytes", autospec=True)
     topic.deserialize(b"1234", Serializable)
@@ -117,11 +117,28 @@ def test_deserialize_serializable(mocker: MockFixture):
 def test_deserialize_schema(mocker: MockFixture):
     registry = SampleRegistry()
     topic = BaseTopic("test-topic", schema_registry=registry)
-    from_bytes = mocker.patch.object(SchematicSerializable, "from_bytes", autpspec=True)
+    from_bytes = mocker.patch.object(SchematicSerializable,
+                                     "from_bytes",
+                                     autpspec=True)
     with pytest.raises(TypeError):
         topic._deserialize_schema(io.BytesIO(b"12345"), SchematicSerializable)
     bio = io.BytesIO(b"\x00\x01\x02\x03\x04")
     topic._deserialize_schema(bio, SchematicSerializable)
     from_bytes.assert_called_once_with(
-        bio, struct.unpack(">I", b"\x01\x02\x03\x04")[0], ""
-    )
+        bio,
+        struct.unpack(">I", b"\x01\x02\x03\x04")[0], "")
+
+
+def test_deserialize_schemaserializable_type(mocker: MockFixture):
+    topic = BaseTopic("test-topic")
+    deserialize_schema = mocker.patch.object(BaseTopic,
+                                             "_deserialize_schema",
+                                             autospec=True)
+    bio = io.BytesIO(b'1234')
+    bio_mock = mocker.patch('kafka_streamer.topic.base.io.BytesIO',
+                            return_value=bio,
+                            autospec=True)
+    topic.deserialize(b"1234", SchematicSerializable)
+    bio_mock.assert_called_once_with(b'1234')
+    deserialize_schema.assert_called_once_with(topic, bio,
+                                               SchematicSerializable)
