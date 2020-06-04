@@ -1,34 +1,24 @@
 import asyncio
 import functools
 import inspect
-from typing import Callable, Tuple
+from typing import Callable
+
+# def raise_if_function_has_multiple_parameters(func: Callable):
+#     params = inspect.signature(func).parameters
+#     if len(params) > 1:
+#         raise TypeError(
+#             f"Function {func.__name__} must have only one parameter.")
+
+# def get_first_parameter_type_of_function(func: Callable):
+#     params = inspect.signature(func).parameters
+#     first_param_annotation = params[next(iter(params))].annotation
+#     if first_param_annotation == inspect._empty:
+#         first_param_annotation = None
+#     return first_param_annotation
 
 
-def raise_if_function_has_multiple_parameters(func: Callable):
-    params = inspect.signature(func).parameters
-    if len(params) > 1:
-        raise TypeError(f"Function {func.__name__} must have only one parameter.")
-
-
-def get_function_parameters_name(func: Callable):
+def get_function_parameter_names(func: Callable):
     return tuple(inspect.signature(func).parameters.keys())
-
-
-def raise_if_function_parameters_not_in(func: Callable, available_params: Tuple[str]):
-    for key in get_function_parameters_name(func):
-        if key not in available_params:
-            raise TypeError(
-                f"{key} is not a valid function parameter."
-                f"Available parameters: {available_params}"
-            )
-
-
-def get_first_parameter_type_of_function(func: Callable):
-    params = inspect.signature(func).parameters
-    first_param_annotation = params[next(iter(params))].annotation
-    if first_param_annotation == inspect._empty:
-        first_param_annotation = None
-    return first_param_annotation
 
 
 def async_wrap(func):
