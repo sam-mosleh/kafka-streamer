@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-from typing import Optional, List
+from typing import List, Optional
 
 import confluent_kafka
 
@@ -14,8 +15,9 @@ class AsyncKafkaProducer:
         self,
         hosts: List[str],
         max_flush_time_on_full_buffer: float = 5.0,
-        statistics_interval_ms: int = 1000,
-        logger: logging.Logger = None,
+        statistics_interval_ms: int = 5000,
+        use_confluent_monitoring_interceptor: bool = False,
+        logger: Optional[logging.Logger] = None,
         debug: bool = False,
     ):
         conf = {
@@ -26,25 +28,25 @@ class AsyncKafkaProducer:
             "throttle_cb": self.throttle_callback,
             "on_delivery": self.delivery_report_callback,
         }
+        if use_confluent_monitoring_interceptor:
+            conf["plugin.library.paths"] = "monitoring-interceptor"
         if debug:
             conf["debug"] = "topic,broker"
-
         self.max_flush_time_on_full_buffer = max_flush_time_on_full_buffer
-        self.logger = (
-            logger if logger is not None else logging.getLogger("KafkaProducer")
-        )
+        self.logger = logger or logging.getLogger("KafkaProducer")
         self._kafka_instance = confluent_kafka.Producer(conf, logger=self.logger)
         self._async_poll = async_wrap(self._kafka_instance.poll)
-        self._async_flush = async_wrap(self._kafka_instance.poll)
+        self._async_flush = async_wrap(self._kafka_instance.flush)
 
     def error_callback(self, error: confluent_kafka.KafkaError):
-        pass
+        self.logger.error(error)
 
     def stats_callback(self, json_str: str):
-        pass
+        stats = json.loads(json_str)
+        self.logger.debug(stats)
 
     def throttle_callback(self, event: confluent_kafka.ThrottleEvent):
-        pass
+        self.logger.info(event)
 
     def delivery_report_callback(
         self, err: Optional[confluent_kafka.KafkaError], msg: confluent_kafka.Message
@@ -75,9 +77,11 @@ class AsyncKafkaProducer:
             self._poller_task.cancel()
 
     async def poll(self, timeout: float = 0.0):
+        self.logger.debug(f"Polling for {timeout}")
         return await self._async_poll(timeout=timeout)
 
     async def flush(self, timeout: float = 0.0):
+        self.logger.debug(f"Flushing for {timeout}")
         return await self._async_flush(timeout=timeout)
 
     def _send(self, topic: str, value: Union[bytes, str], key: Union[bytes, str]):

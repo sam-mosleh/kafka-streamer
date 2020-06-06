@@ -3,19 +3,6 @@ import functools
 import inspect
 from typing import Callable, Set
 
-# def raise_if_function_has_multiple_parameters(func: Callable):
-#     params = inspect.signature(func).parameters
-#     if len(params) > 1:
-#         raise TypeError(
-#             f"Function {func.__name__} must have only one parameter.")
-
-# def get_first_parameter_type_of_function(func: Callable):
-#     params = inspect.signature(func).parameters
-#     first_param_annotation = params[next(iter(params))].annotation
-#     if first_param_annotation == inspect._empty:
-#         first_param_annotation = None
-#     return first_param_annotation
-
 
 def get_function_parameter_names(func: Callable) -> Set[str]:
     return set(inspect.signature(func).parameters.keys())

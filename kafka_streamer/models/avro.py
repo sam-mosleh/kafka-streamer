@@ -21,7 +21,7 @@ class AvroSchemaMetaClass(ModelMetaclass):
         return new_class
 
 
-class AvroSerializable(SchematicSerializable, BaseModel, metaclass=AvroSchemaMetaClass):
+class AvroRecord(SchematicSerializable, BaseModel, metaclass=AvroSchemaMetaClass):
     _encoders = {}
     _avro_schema: dict = {}
 
@@ -30,20 +30,18 @@ class AvroSerializable(SchematicSerializable, BaseModel, metaclass=AvroSchemaMet
         return json.dumps(JsonSchema(cls.schema()).to_avro())
 
     @classmethod
-    def from_bytes(
-        cls, in_stream: BytesIO, schema_id: int, schema: str
-    ) -> AvroSerializable:
-        if schema_id not in AvroSerializable._encoders:
+    def from_bytes(cls, in_stream: BytesIO, schema_id: int, schema: str) -> AvroRecord:
+        if schema_id not in AvroRecord._encoders:
             schema_json = json.loads(schema)
             avro_schema = fastavro.parse_schema(schema_json)
-            AvroSerializable._encoders[schema_id] = avro_schema
+            AvroRecord._encoders[schema_id] = avro_schema
         try:
             deser_data = fastavro.schemaless_reader(
-                in_stream, AvroSerializable._encoders[schema_id]
+                in_stream, AvroRecord._encoders[schema_id]
             )
         except StopIteration:
             raise MessageDeserializationError(
-                "The given schema might be incompatible " "or the data is corrupted."
+                "The given schema might be incompatible or the data is corrupted."
             )
         return cls(**deser_data)
 

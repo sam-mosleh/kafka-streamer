@@ -17,7 +17,8 @@ class AsyncKafkaConsumer:
         subscription: List[str] = [],
         auto_offset: bool = True,
         statistics_interval_ms: int = 1000,
-        logger: logging.Logger = None,
+        use_confluent_monitoring_interceptor: bool = False,
+        logger: Optional[logging.Logger] = None,
         debug: bool = False,
     ):
         conf = {
@@ -30,12 +31,12 @@ class AsyncKafkaConsumer:
             "stats_cb": self.stats_callback,
             "throttle_cb": self.throttle_callback,
         }
+        if use_confluent_monitoring_interceptor:
+            conf["plugin.library.paths"] = "monitoring-interceptor"
         if debug:
             conf["debug"] = "consumer"
         self.subscription = subscription
-        self.logger = (
-            logger if logger is not None else logging.getLogger("KafkaConsumer")
-        )
+        self.logger = logger or logging.getLogger("KafkaConsumer")
         self._kafka_instance = confluent_kafka.Consumer(conf, logger=self.logger)
         self._async_poll = async_wrap(self._kafka_instance.poll)
 
