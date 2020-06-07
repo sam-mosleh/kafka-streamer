@@ -16,26 +16,20 @@ async def consumer() -> AsyncKafkaConsumer:
 
 @pytest.fixture
 def aenter(mocker):
-    return mocker.patch(
-        "kafka_streamer.client.consumer.AsyncKafkaConsumer.__aenter__", autospec=True
-    )
+    return mocker.patch.object(AsyncKafkaConsumer, "__aenter__", autospec=True)
 
 
 @pytest.fixture
 def aexit(mocker):
-    return mocker.patch(
-        "kafka_streamer.client.consumer.AsyncKafkaConsumer.__aexit__",
-        return_value=False,
-        autospec=True,
+    return mocker.patch.object(
+        AsyncKafkaConsumer, "__aexit__", return_value=False, autospec=True,
     )
 
 
 async def test_subscription_after_enter(
     mocker: MockFixture, consumer: AsyncKafkaConsumer, aexit
 ):
-    subscribe = mocker.patch(
-        "kafka_streamer.client.consumer.AsyncKafkaConsumer.subscribe", autospec=True
-    )
+    subscribe = mocker.patch.object(AsyncKafkaConsumer, "subscribe", autospec=True)
     async with consumer:
         subscribe.assert_called_once_with(consumer, ["test-topic"])
 
@@ -43,9 +37,7 @@ async def test_subscription_after_enter(
 async def test_close_consumer_after_exit(
     mocker: MockFixture, consumer: AsyncKafkaConsumer
 ):
-    close = mocker.patch(
-        "kafka_streamer.client.consumer.AsyncKafkaConsumer.close", autospec=True
-    )
+    close = mocker.patch.object(AsyncKafkaConsumer, "close", autospec=True)
     async with consumer:
         pass
     close.assert_called_once_with(consumer)
@@ -60,10 +52,8 @@ def test_message_validator():
 
 async def test_consumer_fetch(mocker: MockFixture, consumer: AsyncKafkaConsumer):
     message = SampleMessage()
-    mocker.patch(
-        "kafka_streamer.client.consumer.AsyncKafkaConsumer.poll",
-        return_value=message,
-        autospec=True,
+    mocker.patch.object(
+        AsyncKafkaConsumer, "poll", return_value=message, autospec=True,
     )
     assert await consumer.fetch() == message
 
@@ -72,8 +62,9 @@ async def test_kafka_to_queue(
     mocker: MockFixture, consumer: AsyncKafkaConsumer, aenter, aexit
 ):
     message = SampleMessage()
-    mocker.patch(
-        "kafka_streamer.client.consumer.AsyncKafkaConsumer.fetch",
+    mocker.patch.object(
+        AsyncKafkaConsumer,
+        "fetch",
         side_effect=[message, Exception("break while loop")],
         autospec=True,
     )

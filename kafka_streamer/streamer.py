@@ -1,13 +1,13 @@
 import asyncio
 import logging
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import List, Optional, Union
 
 import confluent_kafka
 from confluent_avro import SchemaRegistry
 
-from kafka_streamer.consumer import AsyncKafkaConsumer
+from kafka_streamer.client import AsyncKafkaConsumer, AsyncKafkaProducer
 from kafka_streamer.models import SchematicSerializable, Serializable
-from kafka_streamer.producer import AsyncKafkaProducer
+from kafka_streamer.topic import RegexTopic, SingleTopic
 
 
 class KafkaStreamer:
@@ -17,17 +17,15 @@ class KafkaStreamer:
         group_id: str,
         schema_registry_url: str = None,
         queue_max_size: int = 1000,
-        logger: logging.Logger = None,
+        logger: Optional[logging.Logger] = None,
         debug: bool = False,
     ):
         self._hosts = hosts
         self._group_id = group_id
         self._parent_logger = logger
         self._debug = debug
-        self._topics: List[KafkaTopic] = []
-        self.logger = (
-            logger if logger is not None else logging.getLogger("KafkaStreamer")
-        )
+        self._topics: List[Union[SingleTopic, RegexTopic]] = []
+        self.logger = logger or logging.getLogger("KafkaStreamer")
         self._registry = (
             SchemaRegistry(
                 schema_registry_url,
@@ -84,21 +82,20 @@ class KafkaStreamer:
         topic_name: str,
         value_type: Union[SchematicSerializable, Serializable, bytes] = bytes,
         key_type: Union[SchematicSerializable, Serializable, bytes] = bytes,
-    ) -> KafkaTopic:
+    ) -> Union[RegexTopic, SingleTopic]:
         if topic_name.startswith("^"):
-            topic = KafkaRegexTopic(
+            topic = RegexTopic(
                 topic_name,
-                self.send,
-                value_type,
-                key_type,
+                value_type=value_type,
+                key_type=key_type,
                 schema_registry=self._registry,
             )
         else:
-            topic = KafkaSimpleTopic(
+            topic = SingleTopic(
                 topic_name,
-                self.send,
-                value_type,
-                key_type,
+                produce_callback=self.send,
+                value_type=value_type,
+                key_type=key_type,
                 schema_registry=self._registry,
             )
         self._topics.append(topic)
@@ -120,42 +117,3 @@ class KafkaStreamer:
         self, topic: str, value: bytes, key: bytes = None,
     ):
         await self._producer_queue.put({"topic": topic, "key": key, "value": value})
-
-    # def _deserialize(
-    #     self,
-    #     message: confluent_kafka.Message,
-    #     deserialize_type: Union[
-    #         None, confluent_kafka.Message, Serializable, SchematicSerializable
-    #     ],
-    # ):
-    #     if deserialize_type is None or deserialize_type == confluent_kafka.Message:
-    #         return message
-    #     elif issubclass(deserialize_type, SchematicSerializable):
-    #         with BytesIO(message.value()) as in_stream:
-    #             magic, schema_id = struct.unpack(
-    #                 ">bI", in_stream.read(self._registry.schema_id_size + 1)
-    #             )
-    #             if magic != self._MAGIC_BYTE:
-    #                 raise TypeError("message does not start with magic byte")
-    #             return deserialize_type.from_bytes(
-    #                 in_stream, schema_id, self._registry.get_schema(schema_id)
-    #             )
-    #     elif issubclass(deserialize_type, Serializable):
-    #         return deserialize_type.from_bytes(message.value())
-
-    # def _serialize(
-    #     self,
-    #     topic: str,
-    #     value: Union[bytes, Serializable, SchematicSerializable],
-    #     key: bytes = None,
-    # ) -> dict:
-    #     if isinstance(value, SchematicSerializable):
-    #         subject = f"{topic}-value"
-    #         schema_id = self._registry.register_schema(subject, value._schema)
-    #         with BytesIO() as out_stream:
-    #             out_stream.write(struct.pack("b", self._MAGIC_BYTE))
-    #             out_stream.write(struct.pack(">I", schema_id))
-    #             value = value.to_bytes(out_stream)
-    #     elif isinstance(value, Serializable):
-    #         value = value.to_bytes()
-    #     return {"topic": topic, "key": key, "value": value}

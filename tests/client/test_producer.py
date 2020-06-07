@@ -36,35 +36,37 @@ async def producer() -> AsyncKafkaProducer:
 
 @pytest.fixture
 def aenter(mocker):
-    return mocker.patch(
-        "kafka_streamer.client.producer.AsyncKafkaProducer.__aenter__", autospec=True
-    )
+    return mocker.patch.object(AsyncKafkaProducer, "__aenter__", autospec=True)
 
 
 @pytest.fixture
 def aexit(mocker):
-    return mocker.patch(
-        "kafka_streamer.client.producer.AsyncKafkaProducer.__aexit__",
-        return_value=False,
-        autospec=True,
+    return mocker.patch.object(
+        AsyncKafkaProducer, "__aexit__", return_value=False, autospec=True,
     )
 
 
 @pytest.fixture
 def flush(mocker):
-    return mocker.patch(
-        "kafka_streamer.client.producer.AsyncKafkaProducer.flush",
-        return_value=0,
-        autospec=True,
+    return mocker.patch.object(
+        AsyncKafkaProducer, "flush", return_value=0, autospec=True,
+    )
+
+
+@pytest.fixture
+def produce(mocker):
+    return mocker.patch.object(
+        AsyncKafkaProducer, "produce", return_value=0, autospec=True,
     )
 
 
 async def test_create_poller_after_enter(
     mocker: MockFixture, producer: AsyncKafkaProducer, aexit
 ):
-    create_poller = mocker.patch(
-        "kafka_streamer.client.producer.AsyncKafkaProducer.create_poller", autospec=True
+    create_poller = mocker.patch.object(
+        AsyncKafkaProducer, "create_poller", autospec=True
     )
+    create_poller.assert_not_called()
     async with producer:
         create_poller.assert_called_once_with(producer)
 
@@ -72,17 +74,18 @@ async def test_create_poller_after_enter(
 async def test_cancel_poller_and_flush_after_exit(
     mocker: MockFixture, create_mock_coro, producer: AsyncKafkaProducer, aenter
 ):
-    cancel_poller = mocker.patch(
-        "kafka_streamer.client.producer.AsyncKafkaProducer.cancel_poller", autospec=True
+    cancel_poller = mocker.patch.object(
+        AsyncKafkaProducer, "cancel_poller", autospec=True
     )
-    flush_until_all_messages_are_sent = mocker.patch(
-        "kafka_streamer.client.producer."
-        "AsyncKafkaProducer.flush_until_all_messages_are_sent",
+    flush_until_all_messages_are_sent = mocker.patch.object(
+        AsyncKafkaProducer,
+        "flush_until_all_messages_are_sent",
         return_value=0,
         autospec=True,
     )
     async with producer:
-        pass
+        cancel_poller.assert_not_called()
+        flush_until_all_messages_are_sent.assert_not_called()
     cancel_poller.assert_called_once_with(producer)
     flush_until_all_messages_are_sent.assert_called_once_with(producer)
 
@@ -102,9 +105,7 @@ async def test_poller_task(
 
 
 async def test_produce(mocker: MockFixture, producer: AsyncKafkaProducer, flush):
-    send = mocker.patch(
-        "kafka_streamer.client.producer.AsyncKafkaProducer._send", autospec=True,
-    )
+    send = mocker.patch.object(AsyncKafkaProducer, "_send", autospec=True,)
     await producer.produce("test-topic", b"1234", b"5678")
     send.assert_called_once_with(producer, "test-topic", b"1234", b"5678")
     flush.assert_not_called()
@@ -113,24 +114,22 @@ async def test_produce(mocker: MockFixture, producer: AsyncKafkaProducer, flush)
 async def test_produce_with_full_buffer(
     mocker: MockFixture, producer: AsyncKafkaProducer, flush
 ):
-    send = mocker.patch(
-        "kafka_streamer.client.producer.AsyncKafkaProducer._send",
+    send = mocker.patch.object(
+        AsyncKafkaProducer,
+        "_send",
         side_effect=[BufferError("Buffer is full"), None],
         autospec=True,
     )
     await producer.produce("test-topic", b"345", b"678")
     send.assert_called_with(producer, "test-topic", b"345", b"678")
-    flush.assert_called_once_with(producer, producer.max_flush_time_on_full_buffer)
+    flush.assert_called_once()
     send.assert_called_with(producer, "test-topic", b"345", b"678")
 
 
 async def test_kafka_to_queue(
-    mocker: MockFixture, producer: AsyncKafkaProducer, aenter, aexit
+    mocker: MockFixture, producer: AsyncKafkaProducer, produce, aenter, aexit
 ):
     message = {"topic": "test-topic", "value": b"135", "key": b"579"}
-    produce = mocker.patch(
-        "kafka_streamer.client.producer.AsyncKafkaProducer.produce", autospec=True,
-    )
     q = asyncio.Queue()
     await q.put(message)
     await q.put(None)
@@ -141,19 +140,18 @@ async def test_kafka_to_queue(
 
 
 async def test_cancelled_kafka_to_queue(
-    mocker: MockFixture, producer: AsyncKafkaProducer, aenter, aexit
+    mocker: MockFixture, producer: AsyncKafkaProducer, produce, aenter, aexit
 ):
     aexit.return_value = True
     message = {"topic": "test-topic", "value": b"135", "key": b"579"}
-    produce = mocker.patch(
-        "kafka_streamer.client.producer.AsyncKafkaProducer.produce", autospec=True,
-    )
     get = mocker.patch.object(
         asyncio.Queue,
         "get",
-        side_effect=[asyncio.CancelledError, message],
+        side_effect=[asyncio.CancelledError, message, None],
         autospec=True,
     )
+    put = mocker.patch.object(asyncio.Queue, "put", autospec=True)
     q = asyncio.Queue()
     await producer.queue_to_kafka(q)
+    put.assert_called_once_with(q, None)
     produce.assert_called_once_with(producer, "test-topic", b"135", b"579")

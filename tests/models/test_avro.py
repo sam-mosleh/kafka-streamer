@@ -5,10 +5,10 @@ import fastavro
 import pytest
 
 from kafka_streamer.exceptions import MessageDeserializationError
-from kafka_streamer.models import AvroSerializable
+from kafka_streamer.models import AvroRecord
 
 
-class SimpleModel(AvroSerializable):
+class SimpleModel(AvroRecord):
     x: int
     y: str
     pi: float = 3.14
