@@ -1,7 +1,6 @@
 import asyncio
-import io
-import struct
-from typing import Callable, List, Optional, Set, Tuple, TypeVar, Union
+from abc import ABC, abstractmethod
+from typing import Callable, List, Optional, Set, Tuple, TypeVar
 
 import confluent_kafka
 from confluent_avro import SchemaRegistry
@@ -14,7 +13,7 @@ T = TypeVar("T", SchematicSerializable, Serializable, bytes)
 S = TypeVar("S", SchematicSerializable, Serializable, bytes)
 
 
-class BaseTopic:
+class BaseTopic(ABC):
     _available_parameters = ("key", "value", "offset")
 
     def __init__(
@@ -30,18 +29,25 @@ class BaseTopic:
         self.value = self.create_value(value_type, schema_registry)
         self.key = self.create_key(key_type, schema_registry)
 
+    @abstractmethod
     def create_value(
-        self, value_type: T, schema_registry: Optional[SchemaRegistry],
+            self,
+            value_type: T,
+            schema_registry: Optional[SchemaRegistry],
     ) -> KafkaValue:
-        raise NotImplementedError()
+        pass
 
+    @abstractmethod
     def create_key(
-        self, key_type: S, schema_registry: Optional[SchemaRegistry],
+            self,
+            key_type: S,
+            schema_registry: Optional[SchemaRegistry],
     ) -> KafkaKey:
-        raise NotImplementedError()
+        pass
 
+    @abstractmethod
     def match(self, topic_name: str) -> bool:
-        raise NotImplementedError()
+        pass
 
     def __call__(self, func):
         async_func = async_wrap(func)
@@ -60,8 +66,7 @@ class BaseTopic:
             if parameter not in self._available_parameters:
                 raise TypeError(
                     f"{parameter} is not a valid function parameter."
-                    f"Available parameters: {self._available_parameters}"
-                )
+                    f"Available parameters: {self._available_parameters}")
 
     def has_consumer(self):
         return len(self._consumers) > 0
@@ -73,9 +78,8 @@ class BaseTopic:
         ]
         return asyncio.gather(*all_handlers)
 
-    def _select_parts_of_message(
-        self, msg: confluent_kafka.Message, parts: Set[str]
-    ) -> dict:
+    def _select_parts_of_message(self, msg: confluent_kafka.Message,
+                                 parts: Set[str]) -> dict:
         result = {}
         if "key" in parts:
             result["key"] = self.key.deserialize(msg.key())

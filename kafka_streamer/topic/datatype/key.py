@@ -2,4 +2,5 @@ from .base import KafkaDataType
 
 
 class KafkaKey(KafkaDataType):
-    subject_postfix: str = "key"
+    def _get_postfix(self) -> str:
+        return 'key'
