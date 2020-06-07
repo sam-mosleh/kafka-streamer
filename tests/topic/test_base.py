@@ -11,12 +11,23 @@ from tests.message import SampleMessage
 from tests.registry import SampleRegistry
 
 
-def test_topic_magic_bytes():
+@pytest.fixture
+def create_value(mocker):
+    return mocker.patch.object(BaseTopic, "create_value", autospec=True)
+
+
+@pytest.fixture
+def create_key(mocker):
+    return mocker.patch.object(BaseTopic, "create_key", autospec=True)
+
+
+def test_key_value_created(create_value, create_key):
     topic = BaseTopic("test-topic")
-    assert topic._MAGIC_BYTE == 0
+    create_value.assert_called_once()
+    create_key.assert_called_once()
 
 
-def test_topic_consumer_with_invalid_parameter_name():
+def test_topic_consumer_with_invalid_parameter_name(create_value, create_key):
     topic = BaseTopic("test-topic")
     with pytest.raises(TypeError):
 
@@ -25,7 +36,7 @@ def test_topic_consumer_with_invalid_parameter_name():
             pass
 
 
-def test_topic_consumer_without_parameter():
+def test_topic_consumer_without_parameter(create_value, create_key):
     topic = BaseTopic("test-topic")
     with pytest.raises(TypeError):
 
@@ -34,7 +45,7 @@ def test_topic_consumer_without_parameter():
             pass
 
 
-def test_topic_decorator_adds_consumer(mocker: MockFixture):
+def test_topic_decorator_adds_consumer(mocker: MockFixture, create_value, create_key):
     add = mocker.patch.object(BaseTopic, "_add", autospec=True)
     topic = BaseTopic("test-topic")
     add.assert_not_called()
@@ -43,12 +54,10 @@ def test_topic_decorator_adds_consumer(mocker: MockFixture):
     async def f(value: bytes):
         pass
 
-    print("topic:", f)
-
     add.assert_called_once_with(topic, f, {"value"})
 
 
-def test_topic_consumers_check():
+def test_topic_consumers_check(create_value, create_key):
     topic = BaseTopic("test-topic")
     assert topic.has_consumer() is False
 
@@ -60,7 +69,10 @@ def test_topic_consumers_check():
 
 
 @pytest.mark.asyncio
-async def test_multiple_message_handlers():
+async def test_multiple_message_handlers(mocker: MockFixture, create_value, create_key):
+    kafka_data_type_mock = mocker.MagicMock()
+    kafka_data_type_mock.deserialize.return_value = b"1234"
+    create_value.return_value = kafka_data_type_mock
     msg = SampleMessage(value=b"1234")
     topic = BaseTopic("test-topic")
     mock_one = AsyncMock()
@@ -73,7 +85,12 @@ async def test_multiple_message_handlers():
 
 
 @pytest.mark.asyncio
-async def test_consumer_with_key_parameter():
+async def test_consumer_with_key_parameter(
+    mocker: MockFixture, create_value, create_key
+):
+    kafka_data_type_mock = mocker.MagicMock()
+    kafka_data_type_mock.deserialize.return_value = b"5678"
+    create_key.return_value = kafka_data_type_mock
     msg = SampleMessage(value=b"1234", key=b"5678")
     topic = BaseTopic("test-topic")
     f = AsyncMock()
@@ -83,62 +100,26 @@ async def test_consumer_with_key_parameter():
 
 
 @pytest.mark.asyncio
-async def test_consumer_with_key_value_parameter():
-    msg = SampleMessage(value=b"1234", key=b"5678")
+async def test_consumer_with_key_value_parameter(
+    mocker: MockFixture, create_value, create_key
+):
+    kafka_data_type_mock = mocker.MagicMock()
+    kafka_data_type_mock.deserialize.return_value = b"1111"
+    create_value.return_value = kafka_data_type_mock
+    create_key.return_value = kafka_data_type_mock
+    msg = SampleMessage(value=b"1111", key=b"1111")
     topic = BaseTopic("test-topic")
     f = AsyncMock()
     topic._add(f, {"key", "value"})
     await topic.message_handlers(msg)
-    f.assert_called_once_with(value=b"1234", key=b"5678")
+    f.assert_called_once_with(value=b"1111", key=b"1111")
 
 
 @pytest.mark.asyncio
-async def test_consumer_with_offset_parameter():
+async def test_consumer_with_offset_parameter(create_value, create_key):
     msg = SampleMessage(value=b"1234", offset=100)
     topic = BaseTopic("test-topic")
     f = AsyncMock()
     topic._add(f, {"offset"})
     await topic.message_handlers(msg)
     f.assert_called_once_with(offset=100)
-
-
-def test_deserialize_bytes_type():
-    topic = BaseTopic("test-topic")
-    assert b"1234" == topic.deserialize(b"1234", bytes)
-
-
-def test_deserialize_serializable_type(mocker: MockFixture):
-    topic = BaseTopic("test-topic")
-    from_bytes = mocker.patch.object(Serializable, "from_bytes", autospec=True)
-    topic.deserialize(b"1234", Serializable)
-    from_bytes.assert_called_once_with(b"1234")
-
-
-def test_deserialize_schema(mocker: MockFixture):
-    registry = SampleRegistry()
-    topic = BaseTopic("test-topic", schema_registry=registry)
-    from_bytes = mocker.patch.object(SchematicSerializable,
-                                     "from_bytes",
-                                     autpspec=True)
-    with pytest.raises(TypeError):
-        topic._deserialize_schema(io.BytesIO(b"12345"), SchematicSerializable)
-    bio = io.BytesIO(b"\x00\x01\x02\x03\x04")
-    topic._deserialize_schema(bio, SchematicSerializable)
-    from_bytes.assert_called_once_with(
-        bio,
-        struct.unpack(">I", b"\x01\x02\x03\x04")[0], "")
-
-
-def test_deserialize_schemaserializable_type(mocker: MockFixture):
-    topic = BaseTopic("test-topic")
-    deserialize_schema = mocker.patch.object(BaseTopic,
-                                             "_deserialize_schema",
-                                             autospec=True)
-    bio = io.BytesIO(b'1234')
-    bio_mock = mocker.patch('kafka_streamer.topic.base.io.BytesIO',
-                            return_value=bio,
-                            autospec=True)
-    topic.deserialize(b"1234", SchematicSerializable)
-    bio_mock.assert_called_once_with(b'1234')
-    deserialize_schema.assert_called_once_with(topic, bio,
-                                               SchematicSerializable)

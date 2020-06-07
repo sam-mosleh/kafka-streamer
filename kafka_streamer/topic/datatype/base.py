@@ -1,0 +1,74 @@
+import io
+import struct
+from typing import Optional, TypeVar
+
+from confluent_avro import SchemaRegistry
+
+from kafka_streamer.models import SchematicSerializable, Serializable
+
+T = TypeVar("T", SchematicSerializable, Serializable, bytes)
+
+
+class KafkaDataType:
+    _MAGIC_BYTE = 0
+    subject_postfix: str = ""
+
+    def __init__(
+        self,
+        data_type: T,
+        topic: Optional[str] = None,
+        schema_registry: Optional[SchemaRegistry] = None,
+        auto_register_schema: bool = True,
+    ):
+        self.data_type = data_type
+        self.topic = topic
+        self.schema_registry = schema_registry
+        if auto_register_schema and issubclass(data_type, SchematicSerializable):
+            self.schema_id = self.register_schema()
+
+    def deserialize(self, data: bytes) -> T:
+        if self.data_type == bytes:
+            return data
+        elif issubclass(self.data_type, SchematicSerializable):
+            with io.BytesIO(data) as in_stream:
+                return self._deserialize_schema(in_stream)
+        elif issubclass(self.data_type, Serializable):
+            return self.data_type.from_bytes(data)
+
+    def _deserialize_schema(self, in_stream: io.BytesIO):
+        magic, schema_id = struct.unpack(
+            ">bI", in_stream.read(self.schema_registry.schema_id_size + 1)
+        )
+        if magic != self._MAGIC_BYTE:
+            raise TypeError("message does not start with magic byte")
+        return self.data_type.from_bytes(
+            in_stream, schema_id, self.schema_registry.get_schema(schema_id)
+        )
+
+    def get_subject(self) -> str:
+        return self.topic + "-" + self.subject_postfix
+
+    def register_schema(self):
+        if self.topic is None or self.schema_registry is None:
+            raise RuntimeError(
+                "Topic and schema registry must be set in order to register the schema"
+            )
+        return self.schema_registry.register_schema(
+            self.get_subject(), self.data_type.get_model_schema()
+        )
+
+    def serialize(self, data: Optional[T]) -> bytes:
+        if data is None:
+            return None
+        if not isinstance(data, self.data_type):
+            raise RuntimeError(f"Type of {data} does not match {self.data_type}")
+        if self.data_type == bytes:
+            return data
+        elif issubclass(self.data_type, SchematicSerializable):
+            with io.BytesIO() as out_stream:
+                out_stream.write(struct.pack("b", self._MAGIC_BYTE))
+                out_stream.write(struct.pack(">I", self.schema_id))
+                out_stream.write(data.to_bytes())
+                return out_stream.getvalue()
+        elif issubclass(self.data_type, Serializable):
+            return data.to_bytes()

@@ -1,32 +1,44 @@
 import asyncio
 import io
 import struct
-from typing import Callable, List, Optional, Set, Tuple, Union
+from typing import Callable, List, Optional, Set, Tuple, TypeVar, Union
 
 import confluent_kafka
 from confluent_avro import SchemaRegistry
 
 from kafka_streamer.models import SchematicSerializable, Serializable
+from kafka_streamer.topic.datatype import KafkaKey, KafkaValue
 from kafka_streamer.utils import async_wrap, get_function_parameter_names
+
+T = TypeVar("T", SchematicSerializable, Serializable, bytes)
+S = TypeVar("S", SchematicSerializable, Serializable, bytes)
 
 
 class BaseTopic:
-    _MAGIC_BYTE = 0
     _available_parameters = ("key", "value", "offset")
 
     def __init__(
         self,
         topic_name: str,
         *,
-        value_type: Union[SchematicSerializable, Serializable, bytes] = bytes,
-        key_type: Union[SchematicSerializable, Serializable, bytes] = bytes,
+        value_type: T = bytes,
+        key_type: S = bytes,
         schema_registry: Optional[SchemaRegistry] = None,
     ):
-        self.topic_name = topic_name
-        self.value_type = value_type
-        self.key_type = key_type
+        self._topic_name = topic_name
         self._consumers: List[Tuple[Callable, Set[str]]] = []
-        self._registry = schema_registry
+        self.value = self.create_value(value_type, schema_registry)
+        self.key = self.create_key(key_type, schema_registry)
+
+    def create_value(
+        self, value_type: T, schema_registry: Optional[SchemaRegistry],
+    ) -> KafkaValue:
+        raise NotImplementedError()
+
+    def create_key(
+        self, key_type: S, schema_registry: Optional[SchemaRegistry],
+    ) -> KafkaKey:
+        raise NotImplementedError()
 
     def match(self, topic_name: str) -> bool:
         raise NotImplementedError()
@@ -35,7 +47,6 @@ class BaseTopic:
         async_func = async_wrap(func)
         parameters = get_function_parameter_names(func)
         self._raise_for_invalid_parameter_name(parameters)
-        print("Async:", async_func)
         self._add(async_func, parameters)
         return async_func
 
@@ -67,34 +78,9 @@ class BaseTopic:
     ) -> dict:
         result = {}
         if "key" in parts:
-            result["key"] = self.deserialize(msg.key(), self.key_type)
+            result["key"] = self.key.deserialize(msg.key())
         if "value" in parts:
-            result["value"] = self.deserialize(msg.value(), self.value_type)
+            result["value"] = self.value.deserialize(msg.value())
         if "offset" in parts:
             result["offset"] = msg.offset()
         return result
-
-    def deserialize(
-        self, data: bytes, data_type: Union[SchematicSerializable, Serializable, bytes]
-    ):
-        if data_type == bytes:
-            return data
-        elif issubclass(data_type, SchematicSerializable):
-            with io.BytesIO(data) as in_stream:
-                return self._deserialize_schema(in_stream, data_type)
-        elif issubclass(data_type, Serializable):
-            return data_type.from_bytes(data)
-
-    def _deserialize_schema(
-        self,
-        in_stream: io.BytesIO,
-        data_type: Union[SchematicSerializable, Serializable, bytes],
-    ):
-        magic, schema_id = struct.unpack(
-            ">bI", in_stream.read(self._registry.schema_id_size + 1)
-        )
-        if magic != self._MAGIC_BYTE:
-            raise TypeError("message does not start with magic byte")
-        return data_type.from_bytes(
-            in_stream, schema_id, self._registry.get_schema(schema_id)
-        )
