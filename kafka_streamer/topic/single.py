@@ -10,22 +10,18 @@ from .base import BaseTopic, S, T
 class SingleTopic(BaseTopic):
     def __init__(self, *args, produce_callback: Callable, **kwargs):
         super().__init__(*args, **kwargs)
-        self.name = self._topic_name
         self._produce_callback = produce_callback
 
+    def set_name(self, topic_name: str):
+        self.name = topic_name
+
     def create_value(
-            self,
-            value_type: T,
-            schema_registry: Optional[SchemaRegistry],
+        self, value_type: T, schema_registry: Optional[SchemaRegistry],
     ) -> KafkaValue:
-        return KafkaValue(value_type,
-                          self.name,
-                          schema_registry=schema_registry)
+        return KafkaValue(value_type, self.name, schema_registry=schema_registry)
 
     def create_key(
-            self,
-            key_type: S,
-            schema_registry: Optional[SchemaRegistry],
+        self, key_type: S, schema_registry: Optional[SchemaRegistry],
     ) -> KafkaKey:
         return KafkaKey(key_type, self.name, schema_registry=schema_registry)
 
@@ -36,5 +32,5 @@ class SingleTopic(BaseTopic):
         await self._produce_callback(
             topic=self.name,
             value=self.value.serialize(value),
-            key=self.key.serialize(value),
+            key=self.key.serialize(key),
         )

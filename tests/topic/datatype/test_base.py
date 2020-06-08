@@ -28,8 +28,7 @@ def test_kafka_data_type_autoregister(register_schema, kafka_data_type):
     register_schema.assert_called_once()
 
 
-def test_kafka_data_type_register_schema_without_topic_or_registry(
-    kafka_data_type):
+def test_kafka_data_type_register_schema_without_topic_or_registry(kafka_data_type):
     with pytest.raises(RuntimeError):
         KafkaDataType(SchematicSerializable)
     with pytest.raises(RuntimeError):
@@ -45,15 +44,13 @@ def test_kafka_data_type_registering(mocker: MockFixture, kafka_data_type):
         return_value="schema string",
         autospec=True,
     )
-    mocker.patch.object(KafkaDataType,
-                        "get_subject",
-                        return_value="subject",
-                        autospec=True)
-    data_type = KafkaDataType(SchematicSerializable,
-                              topic="test-topic",
-                              schema_registry=registry)
-    registry.register_schema.assert_called_once_with("subject",
-                                                     "schema string")
+    mocker.patch.object(
+        KafkaDataType, "get_subject", return_value="subject", autospec=True
+    )
+    data_type = KafkaDataType(
+        SchematicSerializable, topic="test-topic", schema_registry=registry
+    )
+    registry.register_schema.assert_called_once_with("subject", "schema string")
     assert data_type.schema_id == 10
 
 
@@ -64,37 +61,32 @@ def test_deserialize_bytes_type(kafka_data_type):
 
 def test_deserialize_serializable_type(mocker: MockFixture, kafka_data_type):
     data_type = KafkaDataType(Serializable)
-    from_bytes = mocker.patch.object(Serializable,
-                                     "from_bytes",
-                                     return_value=b"5678",
-                                     autospec=True)
+    from_bytes = mocker.patch.object(
+        Serializable, "from_bytes", return_value=b"5678", autospec=True
+    )
     assert data_type.deserialize(b"1234") == b"5678"
     from_bytes.assert_called_once_with(b"1234")
 
 
-def test_deserialize_schema_with_invalid_magic_byte(mocker: MockFixture,
-                                                    kafka_data_type):
-    from_bytes = mocker.patch.object(SchematicSerializable,
-                                     "from_bytes",
-                                     autpspec=True)
-    data_type = KafkaDataType(SchematicSerializable,
-                              auto_register_schema=False)
+def test_deserialize_schema_with_invalid_magic_byte(
+    mocker: MockFixture, kafka_data_type
+):
+    from_bytes = mocker.patch.object(SchematicSerializable, "from_bytes", autpspec=True)
+    data_type = KafkaDataType(SchematicSerializable, auto_register_schema=False)
     with pytest.raises(TypeError):
-        data_type._deserialize_schema(io.BytesIO(b"\x01\x02\x03\x04\x05"),
-                                      SchematicSerializable)
+        data_type._deserialize_schema(
+            io.BytesIO(b"\x01\x02\x03\x04\x05"), SchematicSerializable
+        )
 
 
 def test_deserialize_schema(mocker: MockFixture, kafka_data_type):
-    from_bytes = mocker.patch.object(SchematicSerializable,
-                                     "from_bytes",
-                                     autpspec=True)
+    from_bytes = mocker.patch.object(SchematicSerializable, "from_bytes", autpspec=True)
     register = mocker.MagicMock()
     register.schema_id_size = 4
     register.get_schema.return_value = "schema"
-    data_type = KafkaDataType(SchematicSerializable,
-                              "test-topic",
-                              register,
-                              auto_register_schema=False)
+    data_type = KafkaDataType(
+        SchematicSerializable, "test-topic", register, auto_register_schema=False
+    )
     bio = io.BytesIO(b"\x00\x01\x02\x03\x04")
     data_type._deserialize_schema(bio)
     from_bytes.assert_called_once_with(bio, 16909060, "schema")

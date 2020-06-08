@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 from pytest_mock import MockFixture
-from tests.message import SampleMessage
 
 from kafka_streamer.topic import BaseTopic
+from tests.message import SampleMessage
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def add(mocker: MockFixture):
 @pytest.fixture
 def topic(mocker: MockFixture):
     mocker.patch.multiple(BaseTopic, __abstractmethods__=set())
-    return BaseTopic('test-topic')
+    return BaseTopic("test-topic")
 
 
 @pytest.fixture
@@ -81,8 +81,7 @@ def test_topic_consumers_check(topic):
 
 
 @pytest.mark.asyncio
-async def test_multiple_message_handlers(mocker: MockFixture, kafka_data_type,
-                                         topic):
+async def test_multiple_message_handlers(mocker: MockFixture, kafka_data_type, topic):
     msg = SampleMessage(value=b"1234")
     mock_one = AsyncMock()
     mock_two = AsyncMock()
@@ -94,8 +93,7 @@ async def test_multiple_message_handlers(mocker: MockFixture, kafka_data_type,
 
 
 @pytest.mark.asyncio
-async def test_consumer_with_key_parameter(mocker: MockFixture,
-                                           kafka_data_type, topic):
+async def test_consumer_with_key_parameter(mocker: MockFixture, kafka_data_type, topic):
     msg = SampleMessage(value=b"5678", key=b"1234")
     f = AsyncMock()
     topic._add(f, {"key"})
@@ -104,8 +102,9 @@ async def test_consumer_with_key_parameter(mocker: MockFixture,
 
 
 @pytest.mark.asyncio
-async def test_consumer_with_key_value_parameter(mocker: MockFixture,
-                                                 kafka_data_type, topic):
+async def test_consumer_with_key_value_parameter(
+    mocker: MockFixture, kafka_data_type, topic
+):
     msg = SampleMessage(value=b"1234", key=b"1234")
     f = AsyncMock()
     topic._add(f, {"key", "value"})

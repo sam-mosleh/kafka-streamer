@@ -19,29 +19,30 @@ class BaseTopic(ABC):
     def __init__(
         self,
         topic_name: str,
+        /,
         *,
-        value_type: T = bytes,
-        key_type: S = bytes,
+        value_type: T,
+        key_type: S,
         schema_registry: Optional[SchemaRegistry] = None,
     ):
-        self._topic_name = topic_name
         self._consumers: List[Tuple[Callable, Set[str]]] = []
+        self._topic_name = self.set_name(topic_name)
         self.value = self.create_value(value_type, schema_registry)
         self.key = self.create_key(key_type, schema_registry)
 
     @abstractmethod
+    def set_name(self, topic_name: str):
+        pass
+
+    @abstractmethod
     def create_value(
-            self,
-            value_type: T,
-            schema_registry: Optional[SchemaRegistry],
+        self, value_type: T, schema_registry: Optional[SchemaRegistry],
     ) -> KafkaValue:
         pass
 
     @abstractmethod
     def create_key(
-            self,
-            key_type: S,
-            schema_registry: Optional[SchemaRegistry],
+        self, key_type: S, schema_registry: Optional[SchemaRegistry],
     ) -> KafkaKey:
         pass
 
@@ -66,7 +67,8 @@ class BaseTopic(ABC):
             if parameter not in self._available_parameters:
                 raise TypeError(
                     f"{parameter} is not a valid function parameter."
-                    f"Available parameters: {self._available_parameters}")
+                    f"Available parameters: {self._available_parameters}"
+                )
 
     def has_consumer(self):
         return len(self._consumers) > 0
@@ -78,8 +80,9 @@ class BaseTopic(ABC):
         ]
         return asyncio.gather(*all_handlers)
 
-    def _select_parts_of_message(self, msg: confluent_kafka.Message,
-                                 parts: Set[str]) -> dict:
+    def _select_parts_of_message(
+        self, msg: confluent_kafka.Message, parts: Set[str]
+    ) -> dict:
         result = {}
         if "key" in parts:
             result["key"] = self.key.deserialize(msg.key())

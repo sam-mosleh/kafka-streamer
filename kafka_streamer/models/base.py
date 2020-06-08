@@ -1,27 +1,33 @@
 from __future__ import annotations
 
+from abc import ABCMeta, abstractmethod
 from io import BytesIO
 
 
-class Serializable:
+class Serializable(metaclass=ABCMeta):
     @staticmethod
+    @abstractmethod
     def from_bytes(cls, data: bytes) -> Serializable:
-        raise NotImplementedError()
+        pass
 
+    @abstractmethod
     def to_bytes(self):
-        raise NotImplementedError()
+        pass
 
 
-class SchematicSerializable:
+class SchematicSerializable(metaclass=ABCMeta):
     @classmethod
+    @abstractmethod
     def get_model_schema(cls) -> str:
-        raise NotImplementedError()
+        pass
 
     @classmethod
+    @abstractmethod
     def from_bytes(
         cls, in_stream: BytesIO, schema_id: int, schema: str
     ) -> SchematicSerializable:
-        raise NotImplementedError()
+        pass
 
+    @abstractmethod
     def to_bytes(self) -> bytes:
-        raise NotImplementedError()
+        pass
