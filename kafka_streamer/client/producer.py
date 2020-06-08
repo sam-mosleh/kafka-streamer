@@ -52,11 +52,11 @@ class AsyncKafkaProducer:
         self, err: Optional[confluent_kafka.KafkaError], msg: confluent_kafka.Message
     ):
         if err is not None:
-            self.logger.warning(f"Message delivery failed: {err}")
+            self.logger.warning(f"Message delivery> failure: {err}")
         else:
             self.logger.debug(
-                f"Message delivered to <"
-                f"Topic: {msg.topic()}, "
+                f"Message delivery> delivered to "
+                f"<Topic: {msg.topic()}, "
                 f"Partition: {msg.partition()}, "
                 f"Offset: {msg.offset()}>"
             )
@@ -77,11 +77,11 @@ class AsyncKafkaProducer:
             self._poller_task.cancel()
 
     async def poll(self, timeout: float = 0.0):
-        self.logger.debug(f"Polling for {timeout}")
+        self.logger.debug(f"Poll> polling for {timeout}")
         return await self._async_poll(timeout=timeout)
 
     async def flush(self, timeout: float = 0.0):
-        self.logger.debug(f"Flushing for {timeout}")
+        self.logger.debug(f"Flush> flushing for {timeout}")
         return await self._async_flush(timeout=timeout)
 
     def _send(self, topic: str, value: Union[bytes, str], key: Union[bytes, str]):
@@ -92,7 +92,7 @@ class AsyncKafkaProducer:
         try:
             self._send(topic, value, key)
         except BufferError as bf:
-            self.logger.warning(f"Buffer error : {bf}")
+            self.logger.warning(f"Produce> Buffer error : {bf}")
             await self.flush(self.max_flush_time_on_full_buffer)
             self._send(topic, value, key)
 
@@ -103,7 +103,7 @@ class AsyncKafkaProducer:
             except asyncio.CancelledError:
                 if queue.qsize() > 0:
                     self.logger.warning(
-                        f"There are {queue.qsize()} items"
+                        f"Cancellation> There are {queue.qsize()} items"
                         " in producer queue. Waiting to produce them."
                     )
                 # Send termination signal
@@ -118,10 +118,10 @@ class AsyncKafkaProducer:
             )
         if queue.qsize() > 0:
             self.logger.error(
-                f"There are {queue.qsize()} items"
+                f"Cancellation> There are {queue.qsize()} items"
                 " in producer queue. Discarding them."
             )
-        self.logger.info("Producing from queue finished")
+        self.logger.info("Cancellation> Producing from queue finished")
 
     async def poll_forever(self):
         while True:
@@ -129,10 +129,10 @@ class AsyncKafkaProducer:
             await asyncio.sleep(1.0)
 
     async def flush_until_all_messages_are_sent(self, flush_timeouts: float = 1.0):
-        self.logger.info("Flushing")
+        self.logger.info("Flush> started")
         while True:
             pending_messages = await self.flush(flush_timeouts)
-            self.logger.info(f"Flushing> Pending: {pending_messages} messages")
+            self.logger.info(f"Flush> Pending: {pending_messages} messages")
             if pending_messages == 0:
                 break
-        self.logger.info("Flushing state finished")
+        self.logger.info("Flush> finished")

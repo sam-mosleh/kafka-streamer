@@ -73,9 +73,7 @@ class KafkaStreamer:
         )
 
     def _unique_consuming_topics(self) -> List[str]:
-        return list(
-            set([topic.topic_name for topic in self._topics if topic.has_consumer()])
-        )
+        return list(set([topic.name for topic in self._topics if topic.has_consumer()]))
 
     def topic(
         self,

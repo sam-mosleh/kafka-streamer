@@ -12,8 +12,13 @@ class SingleTopic(BaseTopic):
         super().__init__(*args, **kwargs)
         self._produce_callback = produce_callback
 
-    def set_name(self, topic_name: str):
-        self.name = topic_name
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, topic_name: str):
+        self._name = topic_name
 
     def create_value(
         self, value_type: T, schema_registry: Optional[SchemaRegistry],

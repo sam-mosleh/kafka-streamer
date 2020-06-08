@@ -26,12 +26,18 @@ class BaseTopic(ABC):
         schema_registry: Optional[SchemaRegistry] = None,
     ):
         self._consumers: List[Tuple[Callable, Set[str]]] = []
-        self._topic_name = self.set_name(topic_name)
+        self.name = topic_name
         self.value = self.create_value(value_type, schema_registry)
         self.key = self.create_key(key_type, schema_registry)
 
+    @property
     @abstractmethod
-    def set_name(self, topic_name: str):
+    def name(self):
+        pass
+
+    @name.setter
+    @abstractmethod
+    def name(self, topic_name: str):
         pass
 
     @abstractmethod
