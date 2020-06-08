@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import List, Optional, Union
@@ -36,9 +38,11 @@ class KafkaStreamer:
         )
         self._queue_max_size = queue_max_size
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> KafkaStreamer:
         await self._create_producer()
         await self._create_consumer()
+        # Context switching in order to start tasks
+        await asyncio.sleep(0)
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):

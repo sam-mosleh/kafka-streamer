@@ -3,7 +3,7 @@ import struct
 from abc import ABC, abstractmethod
 from typing import Optional, TypeVar
 
-from confluent_avro import SchemaRegistry
+from confluent_avro.schema_registry import CompatibilityLevel, SchemaRegistry
 
 from kafka_streamer.models import SchematicSerializable, Serializable
 
@@ -76,3 +76,13 @@ class KafkaDataType(ABC):
                 return out_stream.getvalue()
         elif issubclass(self.data_type, Serializable):
             return data.to_bytes()
+
+    @property
+    def compatibility(self) -> CompatibilityLevel:
+        return self.schema_registry.get_subject_compatibility(self.get_subject())
+
+    @compatibility.setter
+    def compatibility(self, compatibility_level: CompatibilityLevel):
+        self.schema_registry.set_subject_compatibility(
+            self.get_subject(), compatibility_level
+        )
