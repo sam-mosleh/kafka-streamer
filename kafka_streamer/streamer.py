@@ -18,6 +18,7 @@ class KafkaStreamer:
         hosts: List[str],
         group_id: str,
         schema_registry_url: str = None,
+        start_from_beginning_if_no_offset_available: bool = True,
         queue_max_size: int = 1000,
         logger: Optional[logging.Logger] = None,
         debug: bool = False,
@@ -27,6 +28,7 @@ class KafkaStreamer:
         self._parent_logger = logger
         self._debug = debug
         self._topics: List[Union[SingleTopic, RegexTopic]] = []
+        self._auto_offset_reset = start_from_beginning_if_no_offset_available
         self.logger = logger or logging.getLogger("KafkaStreamer")
         self._registry = (
             SchemaRegistry(
@@ -68,6 +70,7 @@ class KafkaStreamer:
             self._group_id,
             self._unique_consuming_topics(),
             False,
+            self._auto_offset_reset,
             logger=self._parent_logger,
             debug=self._debug,
         )

@@ -21,8 +21,8 @@ class BaseTopic(ABC):
         topic_name: str,
         /,
         *,
-        value_type: T,
-        key_type: S,
+        value_type: T = bytes,
+        key_type: S = bytes,
         schema_registry: Optional[SchemaRegistry] = None,
     ):
         self._consumers: List[Tuple[Callable, Set[str]]] = []

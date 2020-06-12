@@ -16,6 +16,7 @@ class AsyncKafkaConsumer:
         group_id: str,
         subscription: List[str] = [],
         auto_offset: bool = True,
+        start_from_beginning_if_no_offset_available: bool = True,
         statistics_interval_ms: int = 1000,
         use_confluent_monitoring_interceptor: bool = False,
         logger: Optional[logging.Logger] = None,
@@ -24,13 +25,14 @@ class AsyncKafkaConsumer:
         conf = {
             "bootstrap.servers": ",".join(hosts),
             "group.id": group_id,
-            "auto.offset.reset": "earliest",
             "enable.auto.offset.store": auto_offset,
             "statistics.interval.ms": statistics_interval_ms,
             "error_cb": self.error_callback,
             "stats_cb": self.stats_callback,
             "throttle_cb": self.throttle_callback,
         }
+        if start_from_beginning_if_no_offset_available:
+            conf["auto.offset.reset"] = "earliest"
         if use_confluent_monitoring_interceptor:
             conf["plugin.library.paths"] = "monitoring-interceptor"
         if debug:
