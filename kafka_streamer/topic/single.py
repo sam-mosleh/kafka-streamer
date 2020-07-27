@@ -2,7 +2,11 @@ from typing import Callable, Optional
 
 from confluent_avro import SchemaRegistry
 
-from kafka_streamer.topic.datatype import KafkaKey, KafkaValue
+from kafka_streamer.topic.datatype import (
+    KafkaDataType,
+    keytype_selector,
+    valuetype_selector,
+)
 
 from .base import BaseTopic, S, T
 
@@ -22,13 +26,23 @@ class SingleTopic(BaseTopic):
 
     def create_value(
         self, value_type: T, schema_registry: Optional[SchemaRegistry],
-    ) -> KafkaValue:
-        return KafkaValue(value_type, self.name, schema_registry=schema_registry)
+    ) -> KafkaDataType:
+        return valuetype_selector(
+            value_type,
+            topic=self.name,
+            schema_registry=schema_registry,
+            auto_register_schema=True,
+        )
 
     def create_key(
         self, key_type: S, schema_registry: Optional[SchemaRegistry],
-    ) -> KafkaKey:
-        return KafkaKey(key_type, self.name, schema_registry=schema_registry)
+    ) -> KafkaDataType:
+        return keytype_selector(
+            key_type,
+            topic=self.name,
+            schema_registry=schema_registry,
+            auto_register_schema=True,
+        )
 
     def match(self, topic_name: str) -> bool:
         return self.name == topic_name

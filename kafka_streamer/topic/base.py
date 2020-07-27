@@ -5,12 +5,12 @@ from typing import Callable, List, Optional, Set, Tuple, TypeVar
 import confluent_kafka
 from confluent_avro import SchemaRegistry
 
-from kafka_streamer.models import SchematicSerializable, Serializable
-from kafka_streamer.topic.datatype import KafkaKey, KafkaValue
+from kafka_streamer.models import Serializable, SchematicRecord
+from kafka_streamer.topic.datatype import KafkaDataType
 from kafka_streamer.utils import async_wrap, get_function_parameter_names
 
-T = TypeVar("T", SchematicSerializable, Serializable, bytes)
-S = TypeVar("S", SchematicSerializable, Serializable, bytes)
+T = TypeVar("T", SchematicRecord, Serializable, bytes)
+S = TypeVar("S", SchematicRecord, Serializable, bytes)
 
 
 class BaseTopic(ABC):
@@ -43,13 +43,13 @@ class BaseTopic(ABC):
     @abstractmethod
     def create_value(
         self, value_type: T, schema_registry: Optional[SchemaRegistry],
-    ) -> KafkaValue:
+    ) -> KafkaDataType:
         pass
 
     @abstractmethod
     def create_key(
         self, key_type: S, schema_registry: Optional[SchemaRegistry],
-    ) -> KafkaKey:
+    ) -> KafkaDataType:
         pass
 
     @abstractmethod

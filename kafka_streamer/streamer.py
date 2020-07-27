@@ -8,7 +8,7 @@ import confluent_kafka
 from confluent_avro import SchemaRegistry
 
 from kafka_streamer.client import AsyncKafkaConsumer, AsyncKafkaProducer
-from kafka_streamer.models import SchematicSerializable, Serializable
+from kafka_streamer.models import Serializable, SchematicRecord
 from kafka_streamer.topic import RegexTopic, SingleTopic
 
 
@@ -85,8 +85,8 @@ class KafkaStreamer:
     def topic(
         self,
         topic_name: str,
-        value_type: Union[SchematicSerializable, Serializable, bytes] = bytes,
-        key_type: Union[SchematicSerializable, Serializable, bytes] = bytes,
+        value_type: Union[SchematicRecord, Serializable, bytes] = bytes,
+        key_type: Union[SchematicRecord, Serializable, bytes] = bytes,
     ) -> Union[RegexTopic, SingleTopic]:
         if topic_name.startswith("^"):
             topic = RegexTopic(
@@ -119,6 +119,6 @@ class KafkaStreamer:
                 self._kafka_consumer.set_offset(msg)
 
     async def send(
-        self, topic: str, value: bytes, key: bytes = None,
+        self, topic: str, value: bytes, key: Optional[bytes] = None,
     ):
         await self._producer_queue.put({"topic": topic, "key": key, "value": value})
