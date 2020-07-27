@@ -37,5 +37,6 @@ class AvroRecord(SchematicRecord):
     @schema.setter
     def schema(self, datatype_schema: dict):
         generated_avro = JsonSchema(datatype_schema).to_avro()
-        self._schema = self.parse(generated_avro)
+        self.parse(generated_avro)
+        self._schema = generated_avro
 
