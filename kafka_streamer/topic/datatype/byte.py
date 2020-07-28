@@ -1,5 +1,6 @@
-from .base import KafkaDataType
 from typing import Optional
+
+from .base import KafkaDataType
 
 
 class ByteDataType(KafkaDataType):

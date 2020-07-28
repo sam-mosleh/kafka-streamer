@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import json
 from abc import ABCMeta, abstractmethod
 from io import BytesIO
 from typing import Type
-import json
 
 
 class Serializable(metaclass=ABCMeta):

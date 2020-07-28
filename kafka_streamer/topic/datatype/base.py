@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Union, Type
+from typing import Type, Union
+
 from kafka_streamer.models import SchematicRecord, Serializable
 
 

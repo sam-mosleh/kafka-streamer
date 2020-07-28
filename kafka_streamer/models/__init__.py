@@ -1,4 +1,4 @@
 from .avro import AvroRecord
-from .base import Serializable, SchematicModel, SchematicRecord
+from .base import SchematicModel, SchematicRecord, Serializable
 
 __all__ = ("Serializable", "SchematicModel", "SchematicRecord", "AvroRecord")

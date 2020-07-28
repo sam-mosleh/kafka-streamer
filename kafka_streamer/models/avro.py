@@ -1,18 +1,13 @@
 from __future__ import annotations
 
-import json
 from io import BytesIO
 
 import fastavro
 from avro_schema.convertor import JsonSchema
-from pydantic import BaseModel
-from pydantic.main import ModelMetaclass
 
 from kafka_streamer.exceptions import MessageDeserializationError
 
-from .base import SchematicModel, SchematicRecord
-from typing import Type
-from abc import abstractmethod
+from .base import SchematicRecord
 
 
 class AvroRecord(SchematicRecord):
@@ -38,4 +33,3 @@ class AvroRecord(SchematicRecord):
     def schema(self, datatype_schema: dict):
         generated_avro = JsonSchema(datatype_schema).to_avro()
         self._schema = self.parse(generated_avro)
-

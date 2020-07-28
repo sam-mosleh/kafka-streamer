@@ -1,12 +1,14 @@
-from .base import KafkaDataType
-from typing import Optional
-import struct
-from kafka_streamer.models import Serializable
-from kafka_streamer.exceptions import MessageDeserializationError
 import io
-from confluent_avro.schema_registry import CompatibilityLevel, SchemaRegistry
-from kafka_streamer.models import SchematicRecord, SchematicModel
 import json
+import struct
+from typing import Optional
+
+from confluent_avro.schema_registry import CompatibilityLevel, SchemaRegistry
+
+from kafka_streamer.exceptions import MessageDeserializationError
+from kafka_streamer.models import SchematicModel, SchematicRecord
+
+from .base import KafkaDataType
 
 
 class SchematicDataType(KafkaDataType):

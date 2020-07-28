@@ -1,6 +1,8 @@
-from .base import KafkaDataType
 from typing import Optional, Type
+
 from kafka_streamer.models import Serializable
+
+from .base import KafkaDataType
 
 
 class SerializableDataType(KafkaDataType):

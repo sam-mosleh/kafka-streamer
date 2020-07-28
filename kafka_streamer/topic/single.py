@@ -4,8 +4,8 @@ from confluent_avro import SchemaRegistry
 
 from kafka_streamer.topic.datatype import (
     ByteDataType,
-    SerializableDataType,
     SchematicDataType,
+    SerializableDataType,
     keytype_selector,
     valuetype_selector,
 )

@@ -5,11 +5,11 @@ from typing import Callable, List, Optional, Set, Tuple, TypeVar, Union
 import confluent_kafka
 from confluent_avro import SchemaRegistry
 
-from kafka_streamer.models import Serializable, SchematicRecord
+from kafka_streamer.models import SchematicRecord, Serializable
 from kafka_streamer.topic.datatype import (
     ByteDataType,
-    SerializableDataType,
     SchematicDataType,
+    SerializableDataType,
 )
 from kafka_streamer.utils import async_wrap, get_function_parameter_names
 

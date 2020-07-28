@@ -8,7 +8,7 @@ import confluent_kafka
 from confluent_avro import SchemaRegistry
 
 from kafka_streamer.client import AsyncKafkaConsumer, AsyncKafkaProducer
-from kafka_streamer.models import Serializable, SchematicRecord
+from kafka_streamer.models import SchematicRecord, Serializable
 from kafka_streamer.topic import RegexTopic, SingleTopic
 
 

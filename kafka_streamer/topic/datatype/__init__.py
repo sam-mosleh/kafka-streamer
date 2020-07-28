@@ -1,8 +1,8 @@
 from .base import KafkaDataType
 from .byte import ByteDataType
-from .serializable import SerializableDataType
 from .schematic import SchematicDataType
 from .selector import keytype_selector, valuetype_selector
+from .serializable import SerializableDataType
 
 __all__ = (
     "KafkaDataType",
@@ -12,4 +12,3 @@ __all__ = (
     "keytype_selector",
     "valuetype_selector",
 )
-

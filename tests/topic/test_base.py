@@ -1,5 +1,3 @@
-import io
-import struct
 from unittest.mock import AsyncMock
 
 import pytest

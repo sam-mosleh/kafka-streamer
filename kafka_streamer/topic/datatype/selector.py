@@ -1,10 +1,12 @@
-from .base import KafkaDataType
-from .byte import ByteDataType
-from .serializable import SerializableDataType
-from .schematic import SchematicDataType
-from typing import Union, Type, Optional
-from kafka_streamer.models import SchematicRecord, Serializable
+from typing import Optional, Type, Union
+
 from confluent_avro.schema_registry import SchemaRegistry
+
+from kafka_streamer.models import SchematicRecord, Serializable
+
+from .byte import ByteDataType
+from .schematic import SchematicDataType
+from .serializable import SerializableDataType
 
 
 def datatype_selector(
@@ -12,7 +14,6 @@ def datatype_selector(
     topic: str = "",
     subject_postfix: str = "",
     schema_registry: Optional[SchemaRegistry] = None,
-    auto_register_schema: bool = True,
 ) -> Union[ByteDataType, SerializableDataType, SchematicDataType]:
     if datatype == bytes:
         return ByteDataType()
@@ -21,7 +22,6 @@ def datatype_selector(
             datatype,
             topic=topic,
             schema_registry=schema_registry,
-            auto_register_schema=auto_register_schema,
             subject_postfix=subject_postfix,
         )
     elif issubclass(datatype, Serializable):
@@ -33,14 +33,9 @@ def keytype_selector(
     topic: str = "",
     subject_postfix: str = "",
     schema_registry: Optional[SchemaRegistry] = None,
-    auto_register_schema: bool = True,
 ) -> Union[ByteDataType, SerializableDataType, SchematicDataType]:
     return datatype_selector(
-        datatype,
-        topic=topic,
-        subject_postfix="key",
-        schema_registry=schema_registry,
-        auto_register_schema=auto_register_schema,
+        datatype, topic=topic, subject_postfix="key", schema_registry=schema_registry,
     )
 
 
@@ -49,12 +44,7 @@ def valuetype_selector(
     topic: str = "",
     subject_postfix: str = "",
     schema_registry: Optional[SchemaRegistry] = None,
-    auto_register_schema: bool = True,
 ) -> Union[ByteDataType, SerializableDataType, SchematicDataType]:
     return datatype_selector(
-        datatype,
-        topic=topic,
-        subject_postfix="value",
-        schema_registry=schema_registry,
-        auto_register_schema=auto_register_schema,
+        datatype, topic=topic, subject_postfix="value", schema_registry=schema_registry,
     )
