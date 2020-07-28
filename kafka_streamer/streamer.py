@@ -20,6 +20,7 @@ class KafkaStreamer:
         schema_registry_url: str = None,
         start_from_beginning_if_no_offset_available: bool = True,
         queue_max_size: int = 1000,
+        use_confluent_monitoring_interceptor: bool = False,
         logger: Optional[logging.Logger] = None,
         debug: bool = False,
     ):
@@ -30,6 +31,9 @@ class KafkaStreamer:
         self._topics: List[Union[SingleTopic, RegexTopic]] = []
         self._auto_offset_reset = start_from_beginning_if_no_offset_available
         self.logger = logger or logging.getLogger("KafkaStreamer")
+        self._use_confluent_monitoring_interceptor = (
+            use_confluent_monitoring_interceptor
+        )
         self._registry = (
             SchemaRegistry(
                 schema_registry_url,
@@ -57,7 +61,10 @@ class KafkaStreamer:
 
     async def _create_producer(self):
         self._kafka_producer = AsyncKafkaProducer(
-            self._hosts, logger=self._parent_logger, debug=self._debug
+            self._hosts,
+            use_confluent_monitoring_interceptor=self._use_confluent_monitoring_interceptor,
+            logger=self._parent_logger,
+            debug=self._debug,
         )
         self._producer_queue = asyncio.Queue()
         self._producer_task = asyncio.create_task(
@@ -71,6 +78,7 @@ class KafkaStreamer:
             self._unique_consuming_topics(),
             False,
             self._auto_offset_reset,
+            use_confluent_monitoring_interceptor=self._use_confluent_monitoring_interceptor,
             logger=self._parent_logger,
             debug=self._debug,
         )
