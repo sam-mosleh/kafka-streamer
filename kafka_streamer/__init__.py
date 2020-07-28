@@ -1,4 +1,4 @@
-__version__ = "0.4.2"
+__version__ = "0.4.3"
 
 from confluent_avro.schema_registry import CompatibilityLevel
 
