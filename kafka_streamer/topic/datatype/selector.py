@@ -13,7 +13,7 @@ def datatype_selector(
     subject_postfix: str = "",
     schema_registry: Optional[SchemaRegistry] = None,
     auto_register_schema: bool = True,
-) -> KafkaDataType:
+) -> Union[ByteDataType, SerializableDataType, SchematicDataType]:
     if datatype == bytes:
         return ByteDataType()
     elif isinstance(datatype, SchematicRecord):
@@ -34,7 +34,7 @@ def keytype_selector(
     subject_postfix: str = "",
     schema_registry: Optional[SchemaRegistry] = None,
     auto_register_schema: bool = True,
-) -> KafkaDataType:
+) -> Union[ByteDataType, SerializableDataType, SchematicDataType]:
     return datatype_selector(
         datatype,
         topic=topic,
@@ -50,7 +50,7 @@ def valuetype_selector(
     subject_postfix: str = "",
     schema_registry: Optional[SchemaRegistry] = None,
     auto_register_schema: bool = True,
-) -> KafkaDataType:
+) -> Union[ByteDataType, SerializableDataType, SchematicDataType]:
     return datatype_selector(
         datatype,
         topic=topic,

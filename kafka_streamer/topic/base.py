@@ -1,12 +1,16 @@
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional, Set, Tuple, TypeVar
+from typing import Callable, List, Optional, Set, Tuple, TypeVar, Union
 
 import confluent_kafka
 from confluent_avro import SchemaRegistry
 
 from kafka_streamer.models import Serializable, SchematicRecord
-from kafka_streamer.topic.datatype import KafkaDataType
+from kafka_streamer.topic.datatype import (
+    ByteDataType,
+    SerializableDataType,
+    SchematicDataType,
+)
 from kafka_streamer.utils import async_wrap, get_function_parameter_names
 
 T = TypeVar("T", SchematicRecord, Serializable, bytes)
@@ -43,13 +47,13 @@ class BaseTopic(ABC):
     @abstractmethod
     def create_value(
         self, value_type: T, schema_registry: Optional[SchemaRegistry],
-    ) -> KafkaDataType:
+    ) -> Union[ByteDataType, SerializableDataType, SchematicDataType]:
         pass
 
     @abstractmethod
     def create_key(
         self, key_type: S, schema_registry: Optional[SchemaRegistry],
-    ) -> KafkaDataType:
+    ) -> Union[ByteDataType, SerializableDataType, SchematicDataType]:
         pass
 
     @abstractmethod

@@ -13,17 +13,15 @@ class SchematicDataType(KafkaDataType):
     def __init__(
         self,
         data_type: SchematicRecord,
-        topic: str,
         schema_registry: SchemaRegistry,
-        auto_register_schema: bool = True,
+        topic: Optional[str] = None,
         subject_postfix: str = "",
     ):
         self.data_type = data_type
         self.topic = topic
         self.schema_registry = schema_registry
         self._subject_postfix = subject_postfix
-        if auto_register_schema:
-            self.schema_id = self.register_schema()
+        self._schema_id = None
 
     def get_subject(self) -> str:
         if self._subject_postfix:
@@ -31,14 +29,17 @@ class SchematicDataType(KafkaDataType):
         else:
             return self.topic
 
-    def register_schema(self):
-        if self.topic is None or self.schema_registry is None:
-            raise RuntimeError(
-                "Topic and schema registry must be set in order to register the schema"
+    @property
+    def schema_id(self):
+        if self._schema_id is None:
+            if self.topic is None or self.schema_registry is None:
+                raise RuntimeError(
+                    "Topic and schema registry must be set in order to register the schema"
+                )
+            self._schema_id = self.schema_registry.register_schema(
+                self.get_subject(), json.dumps(self.data_type.schema)
             )
-        return self.schema_registry.register_schema(
-            self.get_subject(), json.dumps(self.data_type.schema)
-        )
+        return self._schema_id
 
     def deserialize(self, data: bytes) -> SchematicModel:
         with io.BytesIO(data) as in_stream:
