@@ -21,10 +21,12 @@ class SchematicModel(metaclass=ABCMeta):
     @classmethod
     @abstractmethod
     def schema(cls) -> dict:
+        """ Returns json schema """
         pass
 
     @abstractmethod
-    def dict(self):
+    def to_dict(self) -> dict:
+        """ Returns self dictionary with primitive types """
         pass
 
 
@@ -66,4 +68,4 @@ class SchematicRecord:
         return self.datatype(**self.read(in_stream, schema))
 
     def to_bytes(self, out_stream: BytesIO, data_model: SchematicModel) -> bytes:
-        self.write(out_stream, data_model.dict())
+        self.write(out_stream, data_model.to_dict())
