@@ -22,12 +22,10 @@ class SchematicModel(metaclass=ABCMeta):
     @abstractmethod
     def schema(cls) -> dict:
         """ Returns json schema """
-        pass
 
     @abstractmethod
     def to_dict(self) -> dict:
         """ Returns self dictionary with primitive types """
-        pass
 
 
 class SchematicRecord:
