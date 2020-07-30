@@ -20,18 +20,20 @@ class Serializable(metaclass=ABCMeta):
 class SchematicModel(metaclass=ABCMeta):
     @classmethod
     @abstractmethod
-    def schema(cls) -> dict:
-        """ Returns json schema """
+    def json_schema(cls) -> dict:
+        """ Returns json schema of the model """
+        pass
 
     @abstractmethod
     def to_dict(self) -> dict:
-        """ Returns self dictionary with primitive types """
+        """ Returns self dictionary """
+        pass
 
 
 class SchematicRecord:
     def __init__(self, datatype: Type[SchematicModel]):
         self.datatype = datatype
-        self.schema = datatype.schema()
+        self.schema = datatype.json_schema()
         self.registered_schemas = {}
 
     @abstractmethod
