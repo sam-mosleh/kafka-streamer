@@ -6,11 +6,8 @@ import confluent_kafka
 from confluent_avro import SchemaRegistry
 
 from kafka_streamer.models import SchematicRecord, Serializable
-from kafka_streamer.topic.datatype import (
-    ByteDataType,
-    SchematicDataType,
-    SerializableDataType,
-)
+from kafka_streamer.topic.datatype import (ByteDataType, SchematicDataType,
+                                           SerializableDataType)
 from kafka_streamer.utils import async_wrap, get_function_parameter_names
 
 T = TypeVar("T", SchematicRecord, Serializable, bytes)

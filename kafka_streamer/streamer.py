@@ -44,20 +44,27 @@ class KafkaStreamer:
         )
         self._queue_max_size = queue_max_size
 
-    async def __aenter__(self) -> KafkaStreamer:
+    async def start(self):
         await self._create_producer()
         await self._create_consumer()
         # Context switching in order to start tasks
         await asyncio.sleep(0)
+
+    async def close(self, cancel_tasks: bool = True):
+        if cancel_tasks:
+            self._consumer_task.cancel()
+            self._producer_task.cancel()
+        return await asyncio.gather(
+            self._producer_task, self._consumer_task, return_exceptions=True
+        )
+
+    async def __aenter__(self) -> KafkaStreamer:
+        await self.start()
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        if exc_type != asyncio.CancelledError:
-            self._consumer_task.cancel()
-            self._producer_task.cancel()
-        await asyncio.gather(
-            self._producer_task, self._consumer_task, return_exceptions=True
-        )
+        tasks_are_not_cancelled = exc_type != asyncio.CancelledError
+        await self.close(cancel_tasks=tasks_are_not_cancelled)
 
     async def _create_producer(self):
         self._kafka_producer = AsyncKafkaProducer(

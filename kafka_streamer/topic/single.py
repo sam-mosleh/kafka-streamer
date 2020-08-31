@@ -2,13 +2,10 @@ from typing import Callable, Optional, Union
 
 from confluent_avro import SchemaRegistry
 
-from kafka_streamer.topic.datatype import (
-    ByteDataType,
-    SchematicDataType,
-    SerializableDataType,
-    keytype_selector,
-    valuetype_selector,
-)
+from kafka_streamer.topic.datatype import (ByteDataType, SchematicDataType,
+                                           SerializableDataType,
+                                           keytype_selector,
+                                           valuetype_selector)
 
 from .base import BaseTopic, S, T
 
