@@ -62,6 +62,7 @@ class AsyncKafkaProducer:
             )
 
     async def __aenter__(self) -> AsyncKafkaProducer:
+        self.exiting = False
         self.create_poller()
         return self
 
@@ -101,6 +102,7 @@ class AsyncKafkaProducer:
             try:
                 await self._get_from_queue_and_produce(queue)
             except asyncio.CancelledError:
+                self.exiting = True
                 if queue.qsize() > 0:
                     self.logger.warning(
                         f"Cancellation> There are {queue.qsize()} items"
@@ -118,7 +120,7 @@ class AsyncKafkaProducer:
             )
         if queue.qsize() > 0:
             self.logger.error(
-                f"Cancellation> There are {queue.qsize()} items"
+                f"Cancellation> There are still {queue.qsize()} items"
                 " in producer queue. Discarding them."
             )
         self.logger.info("Cancellation> Producing from queue finished")

@@ -45,14 +45,16 @@ class KafkaStreamer:
         self._queue_max_size = queue_max_size
 
     async def start(self):
-        await self._create_producer()
-        await self._create_consumer()
+        self._producer_task = await self._create_producer()
+        self._consumer_task = await self._create_consumer()
         # Context switching in order to start tasks
         await asyncio.sleep(0)
 
-    async def close(self, cancel_tasks: bool = True):
-        if cancel_tasks:
-            self._consumer_task.cancel()
+    async def close(self):
+        # Context switching in order to stop tasks
+        await asyncio.sleep(0)
+        self._consumer_task.cancel()
+        if self._kafka_producer.exiting is False:
             self._producer_task.cancel()
         return await asyncio.gather(
             self._producer_task, self._consumer_task, return_exceptions=True
@@ -63,10 +65,9 @@ class KafkaStreamer:
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        tasks_are_not_cancelled = exc_type != asyncio.CancelledError
-        await self.close(cancel_tasks=tasks_are_not_cancelled)
+        await self.close()
 
-    async def _create_producer(self):
+    async def _create_producer(self) -> asyncio.Task:
         self._kafka_producer = AsyncKafkaProducer(
             self._hosts,
             use_confluent_monitoring_interceptor=self._use_confluent_monitoring_interceptor,
@@ -74,11 +75,11 @@ class KafkaStreamer:
             debug=self._debug,
         )
         self._producer_queue = asyncio.Queue()
-        self._producer_task = asyncio.create_task(
+        return asyncio.create_task(
             self._kafka_producer.queue_to_kafka(self._producer_queue)
         )
 
-    async def _create_consumer(self):
+    async def _create_consumer(self) -> asyncio.Task:
         self._kafka_consumer = AsyncKafkaConsumer(
             self._hosts,
             self._group_id,
@@ -90,7 +91,7 @@ class KafkaStreamer:
             debug=self._debug,
         )
         self._consumer_queue = asyncio.Queue(self._queue_max_size)
-        self._consumer_task = asyncio.create_task(
+        return asyncio.create_task(
             self._kafka_consumer.kafka_to_queue(self._consumer_queue)
         )
 
